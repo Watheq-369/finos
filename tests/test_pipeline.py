@@ -1,4 +1,7 @@
-"""Tests for the parts that do not call the LLM: the adapter, the rules, dedup, and billing."""
+"""Tests for the parts that do not call the LLM: the adapter, the rules, dedup, billing, and ingest.
+
+Nothing here touches the network. The ingest client's HTTP call is stubbed.
+"""
 
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -9,6 +12,8 @@ from finos.models import ContractEvent, Route, Source, TrustLevel
 from finos.pipeline.classify import is_internal
 from finos.pipeline.dedup import check_duplicate
 from finos.pipeline.validate import validate
+from finos.store import ingest
+from finos.store.ingest import IngestClient, rows_for
 
 
 def make_event(**overrides) -> ContractEvent:
@@ -108,3 +113,66 @@ def test_billing_refuses_a_second_invoice_for_the_same_thing(tmp_path):
 
     assert first == second
     assert len(billing.invoices) == 1
+
+
+# --- ingest: only what a human must review leaves the machine ---
+
+
+def test_only_invoice_and_flag_cases_reach_the_review_queue():
+    events = [
+        make_event(event_id="gmail:a", route=Route.INVOICE),
+        make_event(event_id="gmail:b", route=Route.FLAG),
+        make_event(event_id="gmail:c", route=Route.HOLD),
+        make_event(event_id="gmail:d", route=Route.REJECT),
+    ]
+
+    rows = rows_for(events, drafts={"gmail:a": "Hi there, invoice attached."})
+
+    assert [row["event_id"] for row in rows] == ["gmail:a", "gmail:b"]
+    assert [row["status"] for row in rows] == ["pending", "flagged"]
+
+
+def test_an_invoice_row_carries_the_billing_facts_and_its_draft():
+    row = rows_for([make_event()], drafts={"gmail:test-001": "Hi there."})[0]
+
+    assert row["client_name"] == "Test GmbH"
+    assert row["invoice_amount"] == 1000.0
+    assert row["currency"] == "EUR"
+    assert row["draft_email"] == "Hi there."
+
+
+def test_a_flagged_row_carries_its_reasons_and_no_draft():
+    event = validate(make_event(invoice_amount=None))
+
+    row = rows_for([event], drafts={})[0]
+
+    assert row["status"] == "flagged"
+    assert "no amount to invoice" in row["flags"]
+    assert row["draft_email"] is None
+
+
+def test_push_sends_a_bearer_token_and_the_rows(monkeypatch):
+    """The HTTP call is stubbed, so the suite stays offline."""
+    monkeypatch.setenv("INGEST_URL", "https://example.test/ingest")
+    monkeypatch.setenv("INGEST_SECRET", "test-secret")
+    sent = {}
+
+    class StubResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"inserted": 1, "updated": 0}
+
+    def stub_post(url, json, headers, timeout):
+        sent.update(url=url, rows=json, headers=headers)
+        return StubResponse()
+
+    monkeypatch.setattr(ingest.httpx, "post", stub_post)
+
+    result = IngestClient().push([{"event_id": "gmail:a"}])
+
+    assert sent["url"] == "https://example.test/ingest"
+    assert sent["headers"]["Authorization"] == "Bearer test-secret"
+    assert sent["rows"] == [{"event_id": "gmail:a"}]
+    assert result == {"inserted": 1, "updated": 0}

@@ -33,6 +33,7 @@ Status tags: `[open]` `[in progress]` `[done]` `[dropped]`.
 ## Upcoming slices
 
 - `[open]` Slice 2: Lovable review UI (approve/send/flag) + Supabase trace store. Also clears Builder "ship v1". Navy editorial, not the dark demo look.
+- `[decision]` Slice 2 integration: Lovable Cloud does not expose the DB service_role key (by design). So the pipeline does NOT write with a raw DB key. It POSTs to a scoped, authenticated ingest edge function (Bearer INGEST_SECRET, upsert on event_id). More secure and the correct FDE pattern: no root key in a worker env. Spec updated. The Builder ship-v1 deliverable (UI + auth + DB + live URL) is already met.
 - `[open]` Slice 3: real Gmail read + QuickBooks sandbox, with idempotency. OAuth is the friction point.
 - `[open]` Slice 4: full TRACE eval suite (LLM judge + trajectory grading) and CI (auto-run tests on commit).
 - `[open]` Runbook / README so a stranger could run it. The handoff artifact. Before demo day.
@@ -59,3 +60,6 @@ Status tags: `[open]` `[in progress]` `[done]` `[dropped]`.
 - Slice 1: `validate` clears `invoice_amount` whenever the final route is not INVOICE. If we are abstaining, there is no amount to bill, and leaving a stale figure on a flagged event invites a wrong invoice downstream. Accepted.
 - Slice 1: extraction runs on every case the classifier did not REJECT, not just INVOICE and FLAG. Extracting from marketing and internal mail is what produced invented values, so REJECT stays skipped on purpose. Accepted.
 - Slice 1: the scorer treats `vat_treatment = "unknown"` as null, since "unknown" is the enum's way of saying "not stated" and the golden set writes that as null. Accepted.
+- `[open]` Slice 2 blocker: the Python ingest client is built and tested, but `INGEST_URL` (`/api/public/ingest` on the Lovable app domain) returns **404** with the app's HTML page, for GET and POST, with and without the Bearer header. That is a client-side SPA fallback, so no server route exists at that path. The endpoint from build step 2 either was not created/deployed, or it lives elsewhere (Lovable Cloud edge functions are usually `https://<project-ref>.supabase.co/functions/v1/<name>`). Nothing to fix on the Python side. Next action is in Lovable: confirm the function exists, is deployed, and copy its real invoke URL into `.env`.
+- `[done]` Slice 2: push is opt-in behind `python -m finos.run --mock --push`. `run_all()` defaults to `push=False` so `finos.score` and the tests never touch the network by construction, rather than relying on a stub being remembered.
+- `[done]` Slice 2: a failed push prints a plain-language line and exits 1 instead of dumping a traceback. Deviation from "no error handling the slice does not need", justified because the case actually fired and the operator is non-technical. The trace is written before the push, so a failed push loses nothing.

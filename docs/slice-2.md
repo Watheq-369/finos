@@ -36,14 +36,15 @@ The pipeline writes INVOICE cases as `pending` and FLAG cases as `flagged`. HOLD
 You are GUI-first, so let Lovable stand up Supabase rather than wiring it by hand.
 
 1. **Lovable (browser).** Build the review app. Tell it to: create the `review_queue` table above in Supabase; add basic email login (single owner); build one screen listing pending invoices (status `pending`) showing client, amount, currency, VAT, and the draft email, each row with Approve & Send, Flag, and Reject buttons that set the row's `status` and `decided_at`; and a second section showing the flagged cases with their reasons so the owner sees what was escalated. Style: navy editorial (#022B72 and #F3F6FB, one sans typeface, translucent hairlines, sharp corners, no shadows). Note on the screen that Send is mock until Slice 3. Deploy to a live URL.
-2. **Get the credentials.** From the Supabase project Lovable created, copy the project URL and the `service_role` key.
-3. **Claude Code (Python).** Add a `SupabaseStore` that upserts the pipeline's results into `review_queue` using those credentials (in `.env` as `SUPABASE_URL` and `SUPABASE_KEY`). Keep the local JSONL trace exactly as it is; Supabase is an additional writer, not a replacement.
-4. **Verify end to end.** Run the pipeline, confirm rows appear in the live UI, click Approve on one, confirm the status flips in Supabase.
+2. **Lovable, add a secure ingest endpoint.** Lovable Cloud does not expose the raw database service_role key, by design, and a real system would never put a root DB key in a worker's env anyway. So the pipeline writes through a scoped, authenticated endpoint instead. Have Lovable create an edge function that accepts a POST with an array of `review_queue` rows, checks a `Bearer` token against a project secret `INGEST_SECRET`, and upserts each row keyed on `event_id` (idempotent). This endpoint is the write half of the seam.
+3. **Set the shared secret.** Put a long random value in Lovable Secrets as `INGEST_SECRET`, and the same value plus the endpoint URL in your local `.env` as `INGEST_SECRET` and `INGEST_URL`. No database key leaves the backend.
+4. **Claude Code (Python).** Add an ingest client that POSTs the pipeline's INVOICE and FLAG results to `INGEST_URL` with the `Bearer INGEST_SECRET` header. Keep the local JSONL trace exactly as it is; the ingest client is an additional writer. Stub it in tests so the suite stays offline.
+5. **Verify end to end.** Run the pipeline, confirm rows appear in the live UI, click Approve on one, confirm the status flips.
 
 ## Foundations (keep the loop intact)
 
 - The offline test suite must still pass with no network. Stub or skip the Supabase writer in tests; the local JSONL store stays the tested path. Determinism preserved.
-- `SUPABASE_URL` and `SUPABASE_KEY` go in `.env` (already gitignored). Never commit them.
+- `INGEST_URL` and `INGEST_SECRET` go in `.env` (already gitignored). No database service_role key is used or stored anywhere. Never commit secrets.
 - Commit when green. Log any discovery to `docs/backlog.md`.
 
 ## Acceptance criteria
@@ -61,4 +62,4 @@ Real Gmail send and real QuickBooks (Slice 3). The full metrics dashboard with c
 
 ## Keep it minimal
 
-One table, one screen, one login, one new store class on the Python side. No extra pages, no charts, no polish beyond the navy basics.
+One table, one screen, one login, one small ingest endpoint, one new ingest client on the Python side. No extra pages, no charts, no polish beyond the navy basics.
