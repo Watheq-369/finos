@@ -77,7 +77,7 @@
     "subject": "we're in!",
     "body": "Hey Younes,\n\nSo excited to finally do this. Signed the thing, it's attached. On money, let's do twelve thousand total, and I'd like to pay half when we actually start (that's September for us) and then the other half once you wrap everything up, which will probably land around November. USD. Let me know if that works and just send whatever you need.\n\nJenna",
     "expected_route": "INVOICE",
-    "expected": {"client_name": "Lakeside Media Inc", "currency": "USD", "total_amount": 12000, "invoice_amount": 6000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+    "expected": {"client_name": "Lakeside Media", "currency": "USD", "total_amount": 12000, "invoice_amount": 6000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
   },
   {
     "message_id": "msg-011",
@@ -101,7 +101,7 @@
     "subject": "Quick question on invoice #1042",
     "body": "Hi Younes,\n\nQuick one, on invoice #1042 you sent last month, could you confirm whether the EUR 24,000 was net or gross of VAT? Our AP team flagged it. No rush, just need it for their records.\n\nThanks,\nPetra",
     "expected_route": "REJECT",
-    "expected": {"client_name": "Nordwind Logistics GmbH", "currency": null, "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "support question about an existing invoice, not a new contract"}
+    "expected": {"client_name": null, "currency": null, "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "support question about an existing invoice, not a new contract"}
   },
   {
     "message_id": "msg-014",

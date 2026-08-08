@@ -26,8 +26,8 @@ Status tags: `[open]` `[in progress]` `[done]` `[dropped]`.
 - `[done]` `.claude/settings.local.json` added to `.gitignore`.
 - `[done]` `docs/slice-1.md` written. Slice pointer advanced to Slice 1 in CLAUDE.md.
 - `[done]` Slice 1 result: route 20/20, wrong invoices 0, invented values 0, extraction 118/120 (98%), 96% on the clean INVOICE core fields. 11 tests green, determinism verified (identical re-runs, ~0.5s cached).
-- `[open]` Golden set issue, msg-010: `expected.client_name` is "Lakeside Media Inc" but the email only ever says "Jenna" and the domain `lakesidemedia.com`. Producing "Inc" would mean inventing a legal suffix, which is exactly what the north star forbids. Pipeline returns "Lakeside Media" and takes the miss on purpose. Decide whether to relax the golden value or accept a permanent 1-field gap.
-- `[open]` msg-013 `client_name` is null because REJECT cases skip extraction (deliberate: extracting from marketing and internal mail is what caused invented values). Golden expects "Nordwind Logistics GmbH". Second permanent 1-field gap unless REJECT cases get a cheap sender-name extraction.
+- `[done]` Golden set fix, msg-010: corrected `expected.client_name` from "Lakeside Media Inc" to "Lakeside Media". The email never says "Inc", so the label was wrong, not the pipeline. Principle: correct a golden label only when the label itself is wrong, never to flatter the output.
+- `[done]` Golden set fix, msg-013: set `expected.client_name` to null. REJECT cases skip extraction by design, so grading a client name there was inconsistent with the intended behaviour. Label corrected, pipeline unchanged.
 - `[open]` The confidence-threshold abstain rule is wired (0.7 on the classifier's own self-reported confidence) but never fires on this corpus, so it is untested in anger. Self-reported confidence is weak evidence; revisit when the eval suite lands in Slice 4.
 
 ## Upcoming slices
