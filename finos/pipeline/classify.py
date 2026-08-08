@@ -1,7 +1,11 @@
 """Stage 1: decide which lane the email belongs in. One cheap LLM call."""
 
+import os
+
 from finos.llm import MODEL_CLASSIFY, ask_json
 from finos.models import ContractEvent, Route
+
+OWN_DOMAIN = os.getenv("OWN_DOMAIN", "younesmotasam.com")
 
 SYSTEM_PROMPT = """You sort incoming business email for a consultant's billing system.
 
@@ -19,7 +23,20 @@ Choose exactly one route:
 Reply with JSON only: {"route": "INVOICE|HOLD|REJECT|FLAG", "confidence": 0.0-1.0, "reason": "one short sentence"}"""
 
 
+def is_internal(email_text: str) -> bool:
+    """Mail from our own domain is a colleague talking, not a client signing."""
+    from_line = email_text.splitlines()[0]
+    return f"@{OWN_DOMAIN}" in from_line.lower()
+
+
 def classify(event: ContractEvent, email_text: str) -> ContractEvent:
+    # Deterministic and free, so it runs before we spend an LLM call.
+    if is_internal(email_text):
+        event.route = Route.REJECT
+        event.flags.append("internal email, not a client contract")
+        event.confidence["classify"] = 1.0
+        return event
+
     result = ask_json(MODEL_CLASSIFY, SYSTEM_PROMPT, email_text)
 
     try:

@@ -12,6 +12,7 @@ from finos.adapters.mock_inbox import MockInbox
 from finos.billing.mock_billing import MockBilling
 from finos.models import ContractEvent, Route
 from finos.pipeline.classify import classify
+from finos.pipeline.dedup import check_duplicate
 from finos.pipeline.draft import draft
 from finos.pipeline.extract import extract
 from finos.pipeline.validate import validate
@@ -23,13 +24,15 @@ def process_one(event: ContractEvent, email_text: str, billing: MockBilling, tra
     classify(event, email_text)
     trace.write(event.event_id, "classify", {"route": event.route, "confidence": event.confidence})
 
-    if event.route in (Route.INVOICE, Route.FLAG):
+    # Anything the classifier did not reject is a contract candidate worth reading.
+    if event.route != Route.REJECT:
         extract(event, email_text)
         trace.write(event.event_id, "extract", event.model_dump(include={
-            "client_name", "client_email", "amount", "currency",
-            "vat_treatment", "vat_rate", "tax_id", "payment_terms", "schedule",
+            "client_name", "client_email", "total_amount", "invoice_amount", "currency",
+            "vat_treatment", "vat_rate", "tax_id", "payment_terms", "schedule", "flags",
         }))
 
+    check_duplicate(event, billing)
     validate(event)
     trace.write(event.event_id, "validate", {"route": event.route, "flags": event.flags})
 
@@ -37,7 +40,7 @@ def process_one(event: ContractEvent, email_text: str, billing: MockBilling, tra
         return f"{event.event_id:24} {event.route.value:8} {'; '.join(event.flags)}"
 
     customer_id = billing.match_or_create_customer(event.client_name, event.client_email)
-    was_duplicate = billing.is_duplicate(event)
+    was_duplicate = billing.invoiced_by(event) is not None
     invoice_id = billing.create_draft_invoice(event)
     trace.write(event.event_id, "billing", {
         "customer_id": customer_id,
@@ -49,7 +52,7 @@ def process_one(event: ContractEvent, email_text: str, billing: MockBilling, tra
     trace.write(event.event_id, "draft", {"covering_email": covering_email})
 
     note = "duplicate, no new invoice" if was_duplicate else "draft invoice + email ready"
-    return f"{event.event_id:24} {event.route.value:8} {event.amount} {event.currency} -> {invoice_id} ({note})"
+    return f"{event.event_id:24} {event.route.value:8} {event.invoice_amount} {event.currency} -> {invoice_id} ({note})"
 
 
 def run_all() -> list[ContractEvent]:

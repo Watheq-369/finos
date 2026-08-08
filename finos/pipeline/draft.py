@@ -17,7 +17,7 @@ def draft(event: ContractEvent) -> str:
     facts = (
         f"Client: {event.client_name}\n"
         f"Contact: {event.client_email}\n"
-        f"Amount to invoice now: {event.amount} {event.currency}\n"
+        f"Amount to invoice now: {event.invoice_amount} {event.currency}\n"
         f"VAT treatment: {event.vat_treatment.value}\n"
         f"Payment terms: {event.payment_terms}\n"
         f"Schedule: {[item.model_dump() for item in event.schedule]}"

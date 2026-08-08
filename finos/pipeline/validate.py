@@ -1,24 +1,36 @@
-"""Stage 3: cheap rule checks, no LLM. Anything missing means abstain, not guess.
+"""Stage 3: the abstain rules. Rule-based, no LLM.
 
-First pass only. The full set of abstain rules lands in Slice 1.
+The extractor reports what it found and what looked wrong. This is the only place
+that turns those signals into a route. When anything is off, we abstain and flag.
 """
 
 from finos.models import ContractEvent, Route
 
-REQUIRED_FIELDS = {
-    "client_name": "no client name",
-    "amount": "no amount",
-    "currency": "no currency",
-}
+CONFIDENCE_THRESHOLD = 0.7
 
 
 def validate(event: ContractEvent) -> ContractEvent:
-    if event.route != Route.INVOICE:
-        return event
+    if event.route == Route.INVOICE:
+        reasons = []
 
-    missing = [reason for field, reason in REQUIRED_FIELDS.items() if getattr(event, field) is None]
-    if missing:
-        event.route = Route.FLAG
-        event.flags.extend(missing)
+        # The extractor already reported problems it saw (missing currency, a range,
+        # figures in an attachment, terms in an MSA, addressed to someone else).
+        if event.flags:
+            reasons.extend(event.flags)
+
+        if event.invoice_amount is None:
+            reasons.append("no amount to invoice")
+        if event.currency is None:
+            reasons.append("no currency")
+        if event.confidence.get("classify", 1.0) < CONFIDENCE_THRESHOLD:
+            reasons.append("low confidence on the route")
+
+        if reasons:
+            event.route = Route.FLAG
+            event.flags = reasons
+
+    # If we are not invoicing, there is no amount to invoice. Never leave a stale figure.
+    if event.route != Route.INVOICE:
+        event.invoice_amount = None
 
     return event

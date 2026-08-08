@@ -52,7 +52,8 @@ class ContractEvent(BaseModel):
     route: Optional[Route] = None
     client_name: Optional[str] = None
     client_email: Optional[str] = None
-    amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None  # the whole engagement
+    invoice_amount: Optional[Decimal] = None  # the part being billed now
     currency: Optional[str] = None  # ISO 4217, e.g. EUR
     vat_treatment: VatTreatment = VatTreatment.UNKNOWN
     vat_rate: Optional[Decimal] = None
