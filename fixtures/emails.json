@@ -1,0 +1,162 @@
+[
+  {
+    "message_id": "msg-001",
+    "from": "Petra Lang <p.lang@nordwind-logistics.de>",
+    "subject": "Countersigned SOW - Q3 revenue analytics engagement",
+    "body": "Hi Younes,\n\nGreat to have this over the line. Attached is the fully countersigned statement of work for the Q3 revenue analytics engagement. The agreed fee is EUR 24,000, invoiced in full on signature, payable net 30.\n\nPlease send the invoice to accounts payable and cc me. Looking forward to kicking off.\n\nBest,\nPetra Lang, Head of Procurement, Nordwind Logistics GmbH",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Nordwind Logistics GmbH", "currency": "EUR", "total_amount": 24000, "invoice_amount": 24000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-002",
+    "from": "Marc Oliver <marc@bcnretailgroup.es>",
+    "subject": "Signed - subscription billing redesign",
+    "body": "Younes,\n\nSigned copy attached. Total engagement is EUR 45,000, split across three equal milestones: EUR 15,000 at kickoff, EUR 15,000 at the midpoint review, and EUR 15,000 on final delivery. Please invoice the kickoff milestone now so we can get started this week.\n\nSaludos,\nMarc, COO, Barcelona Retail Group S.L.",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Barcelona Retail Group S.L.", "currency": "EUR", "total_amount": 45000, "invoice_amount": 15000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-003",
+    "from": "Layla Haddad <layla@falconadvisory.ae>",
+    "subject": "Advisory retainer - countersigned",
+    "body": "Hi Younes,\n\nDelighted to confirm. The advisory retainer is USD 6,000 per month for an initial six-month term, billed monthly in advance. Signed agreement attached. First invoice can go out for this month.\n\nWarm regards,\nLayla Haddad, Managing Partner, Falcon Advisory FZ-LLC",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Falcon Advisory FZ-LLC", "currency": "USD", "total_amount": null, "invoice_amount": 6000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-004",
+    "from": "David Okoro <d.okoro@meridianhealth.co.uk>",
+    "subject": "Order form signed",
+    "body": "Hi Younes,\n\nSigned order form attached. All the commercial figures and the payment schedule are in the order form itself, please raise the invoice against those. Currency is GBP as discussed.\n\nThanks,\nDavid Okoro, Finance Director, Meridian Health Ltd",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Meridian Health Ltd", "currency": "GBP", "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "amount is in the attached order form, not in the email body"}
+  },
+  {
+    "message_id": "msg-005",
+    "from": "Omar Rashid <omar@gulfdatasystems.ae>",
+    "subject": "Deal is on - let's get invoiced",
+    "body": "Younes,\n\nWe're good to go. Total is 50k as agreed, net 15. Contract attached and signed. Send the invoice whenever you're ready.\n\nOmar, Gulf Data Systems",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Gulf Data Systems", "currency": null, "total_amount": 50000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "currency not stated, do not infer from the .ae domain"}
+  },
+  {
+    "message_id": "msg-006",
+    "from": "Sabine Frei <s.frei@helvetia-instruments.ch>",
+    "subject": "Signed agreement - please bill in USD",
+    "body": "Hi Younes,\n\nSigned agreement attached. The fee in the contract is quoted as EUR 30,000, but for our internal accounting please issue the invoice in USD at today's rate. Net 30.\n\nKind regards,\nSabine Frei, Helvetia Instruments AG",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Helvetia Instruments AG", "currency": null, "total_amount": 30000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "currency conflict: quoted in EUR, billing requested in USD"}
+  },
+  {
+    "message_id": "msg-007",
+    "from": "Thomas Berg <t.berg@rheinbach-software.de>",
+    "subject": "Contract signed - implementation support",
+    "body": "Hi Younes,\n\nSigned and attached. The fee is EUR 10,000 plus VAT, payable net 14. Our VAT ID is on the contract if you need it for the invoice.\n\nBeste Gruesse,\nThomas Berg, Rheinbach Software GmbH",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Rheinbach Software GmbH", "currency": "EUR", "total_amount": 10000, "invoice_amount": 10000, "vat_treatment": "plus_vat", "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-008",
+    "from": "Nadia Suleiman <nadia@sandshospitality.ae>",
+    "subject": "Signed contract - please issue compliant e-invoice",
+    "body": "Hi Younes,\n\nContract signed, attached. Fee is AED 80,000, net 30. Please issue a tax-compliant e-invoice including 5% VAT. Our TRN is 100234567800003, it must appear on the invoice.\n\nRegards,\nNadia Suleiman, Finance Manager, Sands Hospitality LLC",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Sands Hospitality LLC", "currency": "AED", "total_amount": 80000, "invoice_amount": 80000, "vat_treatment": "standard", "tax_id": "100234567800003", "flag_reason": null}
+  },
+  {
+    "message_id": "msg-009",
+    "from": "Pau Serra <pau.serra@iberiamobility.es>",
+    "subject": "Firmado - intra-EU B2B",
+    "body": "Hola Younes,\n\nSigned contract attached. Fee is EUR 18,000, net 30. This is an intra-EU B2B supply, so please apply the reverse charge, our VAT number is ESB12345678. No Spanish VAT to be charged.\n\nUn saludo,\nPau Serra, Iberia Mobility S.A.",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Iberia Mobility S.A.", "currency": "EUR", "total_amount": 18000, "invoice_amount": 18000, "vat_treatment": "reverse_charge", "tax_id": "ESB12345678", "flag_reason": null}
+  },
+  {
+    "message_id": "msg-010",
+    "from": "Jenna Cole <jenna@lakesidemedia.com>",
+    "subject": "we're in!",
+    "body": "Hey Younes,\n\nSo excited to finally do this. Signed the thing, it's attached. On money, let's do twelve thousand total, and I'd like to pay half when we actually start (that's September for us) and then the other half once you wrap everything up, which will probably land around November. USD. Let me know if that works and just send whatever you need.\n\nJenna",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Lakeside Media Inc", "currency": "USD", "total_amount": 12000, "invoice_amount": 6000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-011",
+    "from": "Ravi Menon <ravi@cobaltventures.io>",
+    "subject": "Proposal looks good - sending to legal",
+    "body": "Hi Younes,\n\nThe proposal at EUR 20,000 looks good to us. I'm passing it to legal for signature this week and will send the countersigned version once it's done. Nothing to action on your side yet, just wanted to confirm we're moving ahead.\n\nRavi, Cobalt Ventures",
+    "expected_route": "HOLD",
+    "expected": {"client_name": "Cobalt Ventures", "currency": "EUR", "total_amount": 20000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "unsigned proposal, awaiting signature, do not invoice"}
+  },
+  {
+    "message_id": "msg-012",
+    "from": "QuickBooks Team <news@intuit-marketing.com>",
+    "subject": "New: lock in your annual contract and save $120",
+    "body": "Your business, simplified. Sign an annual contract before the end of the month and save $120 on QuickBooks Online. Automate invoicing, track expenses, and get paid faster. Terms apply. Manage your subscription or unsubscribe below.",
+    "expected_route": "REJECT",
+    "expected": {"client_name": null, "currency": null, "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "marketing newsletter, not a contract"}
+  },
+  {
+    "message_id": "msg-013",
+    "from": "Petra Lang <p.lang@nordwind-logistics.de>",
+    "subject": "Quick question on invoice #1042",
+    "body": "Hi Younes,\n\nQuick one, on invoice #1042 you sent last month, could you confirm whether the EUR 24,000 was net or gross of VAT? Our AP team flagged it. No rush, just need it for their records.\n\nThanks,\nPetra",
+    "expected_route": "REJECT",
+    "expected": {"client_name": "Nordwind Logistics GmbH", "currency": null, "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "support question about an existing invoice, not a new contract"}
+  },
+  {
+    "message_id": "msg-014",
+    "from": "Sami K. <sami@younesmotasam.com>",
+    "subject": "Re: Verde deal - where are we",
+    "body": "Younes,\n\nCaught up with Verde. They're basically agreeing to the 40k, split 50/50. I think we can close it this week. Let's not send anything until they've actually signed though, last time we jumped the gun. Talk later.\n\nSami",
+    "expected_route": "REJECT",
+    "expected": {"client_name": null, "currency": null, "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "internal team email, not a client contract"}
+  },
+  {
+    "message_id": "msg-015",
+    "from": "Grace Whitfield <grace@atlasfreight.com>",
+    "subject": "Signed - scope to be confirmed",
+    "body": "Hi Younes,\n\nSigned agreement attached. As discussed, the fee will land somewhere between EUR 8,000 and EUR 12,000 depending on how the final scope shakes out over the next two weeks. Happy for you to get the paperwork ready in the meantime.\n\nGrace, Atlas Freight Co",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Atlas Freight Co", "currency": "EUR", "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "amount is a range (8,000 to 12,000), not a fixed number"}
+  },
+  {
+    "message_id": "msg-016",
+    "from": "Elena Fischer <e.fischer@pinnaclebank.eu>",
+    "subject": "Executed order - FY24 engagement",
+    "body": "Hi Younes,\n\nExecuted order form attached. Fee is EUR 55,000. Payment terms are as set out in our master services agreement, please invoice accordingly.\n\nBest,\nElena Fischer, Vendor Management, Pinnacle Bank",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Pinnacle Bank", "currency": "EUR", "total_amount": 55000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "payment terms reference an external MSA not in the email"}
+  },
+  {
+    "message_id": "msg-017",
+    "from": "Nuria Vidal <nuria@verdeenergy.es>",
+    "subject": "Countersigned - billing team automation",
+    "body": "Hola Younes,\n\nCountersigned, attached. Total is EUR 40,000: 50% upfront on signature and 50% on final delivery. Please invoice the upfront 50% now.\n\nGracias,\nNuria Vidal, Verde Energy S.L.",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Verde Energy S.L.", "currency": "EUR", "total_amount": 40000, "invoice_amount": 20000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-018",
+    "from": "Jonas Reuter <j.reuter@northgate-consulting.de>",
+    "subject": "Signed SOW",
+    "body": "Hi Marcus,\n\nGood to finalise this. Signed SOW attached, EUR 17,500, net 30, as we agreed on the call. Send the invoice over to me directly and we'll process it this week.\n\nJonas Reuter, Northgate Consulting",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Northgate Consulting", "currency": "EUR", "total_amount": 17500, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "email addressed to 'Marcus', not the owner, possible misroute"}
+  },
+  {
+    "message_id": "msg-019",
+    "from": "Karin Vogel <k.vogel@alpenblick-systeme.de>",
+    "subject": "Unterzeichneter Vertrag - Abrechnungsprojekt",
+    "body": "Hallo Younes,\n\nanbei der unterzeichnete Vertrag fuer das Abrechnungsprojekt. Das Honorar betraegt EUR 15.000, zahlbar innerhalb von 30 Tagen nach Rechnungsstellung. Bitte stelle die Rechnung entsprechend aus.\n\nViele Gruesse,\nKarin Vogel, Alpenblick Systeme GmbH",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Alpenblick Systeme GmbH", "currency": "EUR", "total_amount": 15000, "invoice_amount": 15000, "vat_treatment": null, "tax_id": null, "flag_reason": null}
+  },
+  {
+    "message_id": "msg-020",
+    "from": "Petra Lang <p.lang@nordwind-logistics.de>",
+    "subject": "Fwd: Countersigned SOW - Q3 revenue analytics engagement",
+    "body": "Hi Younes,\n\nResending in case the first one got buried, attached is the countersigned SOW, EUR 24,000, net 30 on signature. Let me know once the invoice is on its way.\n\nPetra Lang, Head of Procurement, Nordwind Logistics GmbH",
+    "expected_route": "REJECT",
+    "expected": {"client_name": "Nordwind Logistics GmbH", "currency": "EUR", "total_amount": 24000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "duplicate of msg-001, do not create a second invoice"}
+  }
+]

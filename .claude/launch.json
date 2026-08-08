@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "portfolio",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/Younes.Motasam/Documents/Younes-portfolio && exec python3 -m http.server 8123 --bind 127.0.0.1"
+      ],
+      "port": 8123
+    }
+  ]
+}
