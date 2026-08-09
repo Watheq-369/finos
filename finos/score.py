@@ -1,21 +1,35 @@
-"""Smoke test plus scorer. One command, three numbers.
+"""The eval suite. One command, the whole picture.
 
-    python -m finos.score
+    python -m finos.score              full suite, judge included (cached)
+    python -m finos.score --offline    deterministic parts only, no network
 
-Runs all 20 fixtures, then measures the pipeline against the golden set:
-route accuracy, extraction accuracy, and the invented-values count. Invented
-values is the north-star metric and the target is zero.
+Runs all 20 fixtures, then grades the pipeline five ways: the route it chose, the
+fields it extracted, the values it invented, the path it took to get there, and the
+quality of the drafts it wrote. Failures are bucketed into a taxonomy so you can see
+where it breaks, and the must-pass gates decide the exit code.
+
+Invented values and wrong invoices are the north-star metrics. Both must be zero.
 """
 
+import argparse
+import json
+from collections import Counter
+
 from finos.adapters.mock_inbox import MockInbox
+from finos.evals import judge as judge_module
+from finos.evals.trajectory import classify_routes_from_trace, expected_path, paths_from_trace
 from finos.models import ContractEvent, Route, VatTreatment
 from finos.run import run_all
+from finos.store.local_trace import TRACE_PATH
 
 # The fields the golden set pins down, compared case by case.
 GRADED_FIELDS = ["client_name", "currency", "total_amount", "invoice_amount", "vat_treatment", "tax_id"]
 
 # The narrower bar the spec sets for the clean invoice cases.
 CORE_FIELDS = ["client_name", "currency", "invoice_amount"]
+
+# The routes that mean "the agent declined to act and asked a human".
+ABSTAIN_ROUTES = {"FLAG", "HOLD"}
 
 
 def actual_value(event: ContractEvent, field: str):
@@ -42,14 +56,40 @@ def same(got, want) -> bool:
     return got == want
 
 
+def count_lines(path) -> int:
+    return sum(1 for _ in path.open()) if path.exists() else 0
+
+
+def trace_records_since(path, offset: int) -> list[dict]:
+    """Only this run's records. The trace file is append-only across runs."""
+    with path.open() as f:
+        return [json.loads(line) for line in list(f)[offset:]]
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the FinOS eval suite.")
+    parser.add_argument("--offline", action="store_true",
+                        help="skip the LLM judge; run only the deterministic checks")
+    args = parser.parse_args()
+
+    trace_offset = count_lines(TRACE_PATH)
     events = run_all()
+    records = trace_records_since(TRACE_PATH, trace_offset)
 
     assert len(events) == 20, f"expected 20 events, got {len(events)}"
     assert all(event.route for event in events), "some events finished with no route"
     print("\nsmoke test: 20 events, all routed, no crash")
 
     corpus = {f"gmail:{email['message_id']}": email for email in MockInbox().emails}
+    paths = paths_from_trace(records)
+    classify_routes = classify_routes_from_trace(records)
+    drafts = {r["event_id"]: r["payload"]["covering_email"] for r in records if r["stage"] == "draft"}
+
+    # Every failure lands in a bucket, so a dropped number always has a cause attached.
+    taxonomy: dict[str, list[str]] = {
+        "misroute": [], "mis-extract": [], "wrong-abstain": [],
+        "wrong-trajectory": [], "bad-draft": [],
+    }
 
     print("\n--- ROUTE ---")
     route_matches = 0
@@ -59,6 +99,7 @@ def main() -> None:
             route_matches += 1
         else:
             print(f"  {event.event_id:24} expected {want:8} got {event.route.value}")
+            taxonomy["misroute"].append(f"{event.event_id}: expected {want}, got {event.route.value}")
     print(f"route accuracy: {route_matches}/20")
 
     wrong_invoices = [
@@ -67,6 +108,19 @@ def main() -> None:
         if event.route == Route.INVOICE and corpus[event.event_id]["expected_route"] != "INVOICE"
     ]
     print(f"wrong invoices: {len(wrong_invoices)} {wrong_invoices or ''}")
+
+    print("\n--- ABSTAIN CORRECTNESS ---")
+    abstain_wrong = []
+    for event in events:
+        should_abstain = corpus[event.event_id]["expected_route"] in ABSTAIN_ROUTES
+        did_abstain = event.route.value in ABSTAIN_ROUTES
+        if should_abstain != did_abstain:
+            verb = "should have abstained" if should_abstain else "abstained when it should not"
+            abstain_wrong.append(f"{event.event_id}: {verb}")
+            taxonomy["wrong-abstain"].append(f"{event.event_id}: {verb}")
+    for line in abstain_wrong:
+        print(f"  {line}")
+    print(f"abstain correctness: {20 - len(abstain_wrong)}/20")
 
     print("\n--- EXTRACTION ---")
     checked = matched = 0
@@ -85,11 +139,53 @@ def main() -> None:
                 core_matched += hit
             if not hit:
                 misses.append(f"  {event.event_id:24} {field:16} expected {want!r}, got {got!r}")
+                taxonomy["mis-extract"].append(f"{event.event_id}: {field} expected {want!r}, got {got!r}")
     for miss in misses:
         print(miss)
     print(f"extraction accuracy: {matched}/{checked} fields ({matched / checked:.0%})")
     print(f"  on the clean INVOICE cases, client/currency/amount: "
           f"{core_matched}/{core_checked} ({core_matched / core_checked:.0%})")
+
+    print("\n--- TRAJECTORY (the path, not just the answer) ---")
+    trajectory_ok = 0
+    for event in events:
+        want = expected_path(classify_routes[event.event_id], event.route.value)
+        got = paths.get(event.event_id, [])
+        if got == want:
+            trajectory_ok += 1
+        else:
+            print(f"  {event.event_id:24} expected {'>'.join(want)}")
+            print(f"  {'':24} got      {'>'.join(got)}")
+            taxonomy["wrong-trajectory"].append(f"{event.event_id}: {'>'.join(got)} not {'>'.join(want)}")
+    print(f"trajectory pass rate: {trajectory_ok}/20")
+
+    print("\n--- DRAFT QUALITY ---")
+    placeholder_drafts = []
+    for event_id, text in drafts.items():
+        if judge_module.has_placeholder(text):
+            placeholder_drafts.append(event_id)
+            print(f"  {event_id:24} PLACEHOLDER left in the draft")
+            taxonomy["bad-draft"].append(f"{event_id}: placeholder left in the draft")
+
+    verdicts = {}
+    if args.offline:
+        print("  judge skipped (--offline)")
+    else:
+        by_id = {event.event_id: event for event in events}
+        for event_id, text in drafts.items():
+            verdicts[event_id] = judge_module.judge_draft(by_id[event_id], text)
+        failed = [f"{eid}: {v['reason']}" for eid, v in verdicts.items() if v["verdict"] != "pass"]
+        for line in failed:
+            print(f"  judge FAIL  {line}")
+            if not any(line.startswith(p) for p in placeholder_drafts):
+                taxonomy["bad-draft"].append(line)
+        print(f"draft quality: {len(drafts) - len(failed)}/{len(drafts)} drafts pass the judge")
+
+        print("\n--- JUDGE VALIDATION (against hand labels) ---")
+        agreed, judged, disagreements = judge_module.agreement(verdicts, judge_module.load_labels())
+        for line in disagreements:
+            print(line)
+        print(f"judge agreement with human labels: {agreed}/{judged}")
 
     print("\n--- INVENTED VALUES (north star, target 0) ---")
     invented = []
@@ -101,6 +197,31 @@ def main() -> None:
     for line in invented:
         print(line)
     print(f"invented values: {len(invented)}")
+
+    print("\n--- FAILURE TAXONOMY ---")
+    counts = Counter({bucket: len(items) for bucket, items in taxonomy.items()})
+    for bucket in ["misroute", "mis-extract", "wrong-abstain", "wrong-trajectory", "bad-draft"]:
+        print(f"  {bucket:18} {counts[bucket]}")
+        for item in taxonomy[bucket]:
+            print(f"      {item}")
+
+    print("\n--- MUST-PASS GATES ---")
+    gates = [
+        ("zero wrong invoices", len(wrong_invoices) == 0),
+        ("zero invented values", len(invented) == 0),
+        ("abstain correctness 100%", len(abstain_wrong) == 0),
+        ("all trajectories correct", trajectory_ok == 20),
+        ("no draft with a placeholder", len(placeholder_drafts) == 0),
+    ]
+    for name, passed in gates:
+        print(f"  {'PASS' if passed else 'FAIL'}  {name}")
+
+    if all(passed for _, passed in gates):
+        print("\nALL GATES PASS")
+    else:
+        failed_gates = [name for name, passed in gates if not passed]
+        print(f"\nGATE FAILURE: {', '.join(failed_gates)}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,26 @@
+{
+  "gmail:msg-001": {
+    "label": "fail",
+    "why": "opens with the placeholder [Client's Name] instead of Nordwind Logistics GmbH, which the extractor got right"
+  },
+  "gmail:msg-002": {
+    "label": "fail",
+    "why": "calls 15,000 EUR the project total and invents a 50% upfront split; the engagement is 45,000 EUR across three equal milestones and 15,000 is the kickoff one"
+  },
+  "gmail:msg-003": {
+    "label": "pass",
+    "why": "names Layla, states 6000 USD, adds no terms the email did not contain"
+  },
+  "gmail:msg-007": {
+    "label": "pass",
+    "why": "10,000 EUR plus VAT and net 14 both match the extracted facts"
+  },
+  "gmail:msg-009": {
+    "label": "pass",
+    "why": "18,000 EUR with the reverse charge stated correctly for an EU cross-border client"
+  },
+  "gmail:msg-017": {
+    "label": "pass",
+    "why": "20,000 EUR described as the 50% upfront of a 40,000 EUR engagement, which is accurate"
+  }
+}

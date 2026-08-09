@@ -12,6 +12,15 @@ from finos.models import ContractEvent, Route, Source, TrustLevel
 from finos.pipeline.classify import is_internal
 from finos.pipeline.dedup import check_duplicate
 from finos.pipeline.validate import validate
+from finos.evals.judge import agreement, has_placeholder, load_labels
+from finos.evals.trajectory import (
+    ABSTAIN_PATH,
+    INVOICE_PATH,
+    SHORT_CIRCUIT_PATH,
+    classify_routes_from_trace,
+    expected_path,
+    paths_from_trace,
+)
 from finos.store import ingest
 from finos.store.ingest import IngestClient, rows_for
 
@@ -176,3 +185,75 @@ def test_push_sends_a_bearer_token_and_the_rows(monkeypatch):
     assert sent["headers"]["Authorization"] == "Bearer test-secret"
     assert sent["rows"] == [{"event_id": "gmail:a"}]
     assert result == {"inserted": 1, "updated": 0}
+
+
+# --- evals: the path is graded, not just the answer ---
+
+
+def test_an_invoice_must_go_all_the_way_to_a_draft():
+    assert expected_path("INVOICE", "INVOICE") == INVOICE_PATH
+
+
+def test_an_abstain_stops_after_validate():
+    assert expected_path("INVOICE", "FLAG") == ABSTAIN_PATH
+    assert expected_path("INVOICE", "HOLD") == ABSTAIN_PATH
+
+
+def test_a_non_contract_must_never_reach_the_extractor():
+    """Extracting from marketing and internal mail is what produced invented values."""
+    assert expected_path("REJECT", "REJECT") == SHORT_CIRCUIT_PATH
+    assert "extract" not in expected_path("REJECT", "REJECT")
+
+
+def test_a_duplicate_must_be_caught_at_dedup_not_at_billing():
+    """The classifier said contract; dedup overturned it. It must stop before billing."""
+    path = expected_path("INVOICE", "REJECT")
+
+    assert path == ABSTAIN_PATH
+    assert "billing" not in path
+
+
+def test_trace_is_read_back_as_one_path_per_event():
+    records = [
+        {"event_id": "gmail:a", "stage": "classify", "payload": {"route": "INVOICE"}},
+        {"event_id": "gmail:b", "stage": "classify", "payload": {"route": "REJECT"}},
+        {"event_id": "gmail:a", "stage": "extract", "payload": {}},
+        {"event_id": "gmail:a", "stage": "validate", "payload": {}},
+    ]
+
+    assert paths_from_trace(records) == {
+        "gmail:a": ["classify", "extract", "validate"],
+        "gmail:b": ["classify"],
+    }
+    assert classify_routes_from_trace(records) == {"gmail:a": "INVOICE", "gmail:b": "REJECT"}
+
+
+# --- evals: draft quality ---
+
+
+def test_a_leftover_placeholder_is_caught_without_an_llm():
+    assert has_placeholder("Dear [Client's Name],\n\nPlease find attached.")
+    assert has_placeholder("Amount: {{invoice_amount}}")
+    assert not has_placeholder("Dear Petra,\n\nPlease find attached the invoice for 24,000 EUR.")
+
+
+def test_the_hand_labels_cover_both_verdicts():
+    """A judge validated only against passes has not been validated."""
+    labels = load_labels()
+
+    assert len(labels) >= 6
+    assert {label["label"] for label in labels.values()} == {"pass", "fail"}
+
+
+def test_judge_agreement_counts_only_the_labelled_cases():
+    labels = {"gmail:a": {"label": "pass"}, "gmail:b": {"label": "fail"}}
+    verdicts = {
+        "gmail:a": {"verdict": "pass", "reason": ""},
+        "gmail:b": {"verdict": "pass", "reason": "looked fine"},
+        "gmail:c": {"verdict": "fail", "reason": "unlabelled, ignored"},
+    }
+
+    matched, checked, disagreements = agreement(verdicts, labels)
+
+    assert (matched, checked) == (1, 2)
+    assert "gmail:b" in disagreements[0]

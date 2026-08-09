@@ -36,8 +36,8 @@ These are the practices that make the system maintainable, checkable, and safe t
 
 ## Current phase (this is the only part that moves)
 
-- **Current slice: 2**
-- **Spec: docs/slice-2.md**
+- **Current slice: 4**
+- **Spec: docs/slice-4.md**
 - Work only within the current slice. Anything the spec marks "later" or "not yet" (real Gmail, real QuickBooks, LangGraph, payment follow-up, the eval suite, memory, UI polish) is out of bounds until the pointer above moves.
 - **To advance:** only on Younes's explicit say-so, update "Current slice" and "Spec" to the next slice and follow that spec. Do not advance on your own.
 
