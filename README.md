@@ -1,5 +1,5 @@
 <!-- After the repo is on GitHub, replace OWNER/REPO below with your handle and repo name to show the live CI badge. -->
-<!-- [![eval](https://github.com/OWNER/REPO/actions/workflows/eval.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/eval.yml) -->
+[![eval](https://github.com/Watheq-369/finos/actions/workflows/eval.yml/badge.svg)](https://github.com/Watheq-369/finos/actions/workflows/eval.yml)
 
 # FinOS: an AI agent for revenue operations
 
