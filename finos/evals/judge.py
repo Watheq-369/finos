@@ -66,14 +66,36 @@ def billing_facts(event: ContractEvent) -> str:
     )
 
 
-def judge_draft(event: ContractEvent, draft_email: str) -> dict:
+def judge_text(facts: str, draft_email: str) -> dict:
     """One verdict, cached on the facts plus the exact draft text."""
-    answer = ask_json(
-        MODEL_EXTRACT,
-        SYSTEM_PROMPT,
-        f"BILLING FACTS\n{billing_facts(event)}\n\nDRAFT\n{draft_email}",
-    )
+    answer = ask_json(MODEL_EXTRACT, SYSTEM_PROMPT, f"BILLING FACTS\n{facts}\n\nDRAFT\n{draft_email}")
     return {"verdict": answer.get("verdict"), "reason": answer.get("reason", "")}
+
+
+def judge_draft(event: ContractEvent, draft_email: str) -> dict:
+    return judge_text(billing_facts(event), draft_email)
+
+
+# The pipeline no longer produces a bad draft, so without this the judge would only ever be
+# measured against passes, and a judge that cannot fail anything would still score 100%.
+# This is the real pre-fix msg-001 draft, frozen as text so it cannot quietly become correct.
+FROZEN_BAD_DRAFT = {
+    "event_id": "frozen:placeholder-draft",
+    "facts": (
+        "Client: Nordwind Logistics GmbH\n"
+        "Amount to invoice now: 24000 EUR\n"
+        "Whole engagement total: 24000\n"
+        "Agreed payment schedule: [{'portion': 'EUR 24,000', 'trigger': 'on signature'}]\n"
+        "VAT treatment: unknown\n"
+        "Payment terms: net 30"
+    ),
+    "draft": (
+        "Dear [Client's Name],\n\n"
+        "I hope this message finds you well. Please find attached the invoice for the amount "
+        "of 24,000 EUR. As per our agreement, the payment terms are net 30 days.\n\n"
+        "Thank you for your continued partnership.\n\nBest regards,\nYounes"
+    ),
+}
 
 
 def load_labels() -> dict:

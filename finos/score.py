@@ -87,7 +87,7 @@ def main() -> None:
 
     # Every failure lands in a bucket, so a dropped number always has a cause attached.
     taxonomy: dict[str, list[str]] = {
-        "misroute": [], "mis-extract": [], "wrong-abstain": [],
+        "misroute": [], "mis-extract": [], "mis-schedule": [], "wrong-abstain": [],
         "wrong-trajectory": [], "bad-draft": [],
     }
 
@@ -146,6 +146,25 @@ def main() -> None:
     print(f"  on the clean INVOICE cases, client/currency/amount: "
           f"{core_matched}/{core_checked} ({core_matched / core_checked:.0%})")
 
+    print("\n--- SCHEDULE ---")
+    # Graded by instalment count, not by text. The portions are free text, so exact match
+    # would fail on wording; the count is what catches a split being invented or collapsed.
+    schedule_checked = schedule_matched = 0
+    for event in events:
+        want = corpus[event.event_id]["expected"].get("schedule_count")
+        if want is None:
+            continue
+        schedule_checked += 1
+        got = len(event.schedule)
+        if got == want:
+            schedule_matched += 1
+        else:
+            portions = [item.portion for item in event.schedule]
+            print(f"  {event.event_id:24} expected {want} instalment(s), got {got}: {portions}")
+            taxonomy["mis-schedule"].append(
+                f"{event.event_id}: expected {want} instalment(s), got {got} {portions}")
+    print(f"schedule accuracy: {schedule_matched}/{schedule_checked}")
+
     print("\n--- TRAJECTORY (the path, not just the answer) ---")
     trajectory_ok = 0
     for event in events:
@@ -174,6 +193,9 @@ def main() -> None:
         by_id = {event.event_id: event for event in events}
         for event_id, text in drafts.items():
             verdicts[event_id] = judge_module.judge_draft(by_id[event_id], text)
+        # Judged alongside the run, but never counted as one of this run's drafts.
+        frozen = judge_module.FROZEN_BAD_DRAFT
+        frozen_verdict = judge_module.judge_text(frozen["facts"], frozen["draft"])
         failed = [f"{eid}: {v['reason']}" for eid, v in verdicts.items() if v["verdict"] != "pass"]
         for line in failed:
             print(f"  judge FAIL  {line}")
@@ -182,7 +204,8 @@ def main() -> None:
         print(f"draft quality: {len(drafts) - len(failed)}/{len(drafts)} drafts pass the judge")
 
         print("\n--- JUDGE VALIDATION (against hand labels) ---")
-        agreed, judged, disagreements = judge_module.agreement(verdicts, judge_module.load_labels())
+        agreed, judged, disagreements = judge_module.agreement(
+            {**verdicts, frozen["event_id"]: frozen_verdict}, judge_module.load_labels())
         for line in disagreements:
             print(line)
         print(f"judge agreement with human labels: {agreed}/{judged}")
@@ -200,7 +223,8 @@ def main() -> None:
 
     print("\n--- FAILURE TAXONOMY ---")
     counts = Counter({bucket: len(items) for bucket, items in taxonomy.items()})
-    for bucket in ["misroute", "mis-extract", "wrong-abstain", "wrong-trajectory", "bad-draft"]:
+    for bucket in ["misroute", "mis-extract", "mis-schedule", "wrong-abstain",
+                   "wrong-trajectory", "bad-draft"]:
         print(f"  {bucket:18} {counts[bucket]}")
         for item in taxonomy[bucket]:
             print(f"      {item}")
@@ -210,6 +234,7 @@ def main() -> None:
         ("zero wrong invoices", len(wrong_invoices) == 0),
         ("zero invented values", len(invented) == 0),
         ("abstain correctness 100%", len(abstain_wrong) == 0),
+        ("schedule instalments correct on all invoice cases", schedule_matched == schedule_checked),
         ("all trajectories correct", trajectory_ok == 20),
         ("no draft with a placeholder", len(placeholder_drafts) == 0),
     ]

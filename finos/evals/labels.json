@@ -4,8 +4,8 @@
     "why": "re-labelled after the draft prompt fix. This was the [Client's Name] placeholder case; it now greets Nordwind Logistics GmbH and states 24,000 EUR net 30 correctly. The placeholder regression itself is pinned in tests, not here."
   },
   "gmail:msg-002": {
-    "label": "fail",
-    "why": "calls 15,000 EUR the project total and invents a 50% upfront split; the engagement is 45,000 EUR across three equal milestones and 15,000 is the kickoff one"
+    "label": "pass",
+    "why": "re-labelled after the schedule extraction fix. It previously called 15,000 EUR the project total and invented a 50% upfront split. It now says 'the initial portion of our project, totaling 15,000 EUR', which is true of the kickoff milestone of three, and invents nothing."
   },
   "gmail:msg-003": {
     "label": "pass",
@@ -22,5 +22,9 @@
   "gmail:msg-017": {
     "label": "pass",
     "why": "20,000 EUR described as the 50% upfront of a 40,000 EUR engagement, which is accurate"
+  },
+  "frozen:placeholder-draft": {
+    "label": "fail",
+    "why": "the real pre-fix msg-001 draft, kept frozen so the judge is always measured against a known-bad case and cannot score 100% by only ever passing things"
   }
 }

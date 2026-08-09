@@ -47,7 +47,8 @@ null. A missing value is always better than a guessed one. In particular:
   a master services agreement or another external document instead of in the email, add the
   problem "terms in external document". A plain "net 30" in the email is not this problem.
 - A currency conflict or a missing currency does not erase the amounts. Still return any fee
-  figure the email states.
+  figure the email states, including as total_amount. "The fee is EUR 30,000 but invoice in
+  USD" still has a stated total of 30000; only the currency is unusable, not the figure.
 - tax_id: return it only if the actual number is written out. If the email merely says the VAT
   ID is on the contract or available on request, return null.
 - vat_treatment: "plus_vat" if the fee is stated as plus VAT, "standard" if a specific VAT
@@ -71,6 +72,27 @@ invoice_amount is the part to be billed right now:
   fee is being billed and invoice_amount equals that fee.
 - If no usable figure is stated, invoice_amount is null.
 
+schedule counts the payments the email states, one item per payment instruction, in the
+email's own words and figures, in the order stated. Whenever the email states a fee, schedule
+has at least one item. Only an email stating no payment at all gives an empty list.
+- Paid in full on a single occasion: ONE item covering the whole fee. An email saying
+  "GBP 9,000, net 30" gives one item, portion "GBP 9,000", trigger "net 30". A lump sum is
+  still a schedule of one. If no timing is stated, trigger is null.
+- Milestones or instalments: ONE ITEM EACH. An email with three GBP 5,000 milestones at
+  kickoff, midpoint and delivery gives THREE items, like this:
+  [{"portion": "GBP 5,000 at kickoff", "trigger": "at kickoff"},
+   {"portion": "GBP 5,000 at midpoint", "trigger": "at midpoint"},
+   {"portion": "GBP 5,000 on delivery", "trigger": "on delivery"}]
+- A recurring fee: ONE item describing the recurrence, never one item per period.
+- A payment term on its own is still a schedule of one. "net 14", "net 30" or "due on
+  receipt", with no other timing given, is ONE item for the whole fee with that term as the
+  trigger. VAT wording elsewhere in the email never removes that item.
+portion is always a string, never a bare number: write "USD 6,000", not 6000.
+The examples show the shape only. Never copy their wording or their figures.
+Check before you answer: if invoice_amount or total_amount is not null, schedule must have at
+least one item. An empty schedule alongside a stated fee is always wrong, no matter how much
+the email says about VAT, tax numbers or invoice formatting.
+
 Reply with JSON only, in this shape:
 {
   "client_name": "the client company name as written in the email, or null",
@@ -83,7 +105,7 @@ Reply with JSON only, in this shape:
   "vat_rate": "number or null",
   "tax_id": "the VAT number or TRN as written, or null",
   "payment_terms": "such as net 30, or null",
-  "schedule": [{"portion": "50% upfront", "trigger": "on signature"}],
+  "schedule": [{"portion": "GBP 9,000", "trigger": "net 30"}],
   "problems": ["only from this list: amount in attachment, amount is a range, currency conflict, currency not stated, terms in external document"]
 }"""
 
