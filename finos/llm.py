@@ -15,7 +15,10 @@ from openai import OpenAI
 load_dotenv()
 
 client = OpenAI(
-    api_key=os.getenv("OPENROUTER_API_KEY"),
+    # A fully cached run never calls out, so a clean checkout with no key must still
+    # import. The placeholder only ever reaches the network on a cache miss, which fails
+    # loudly with a 401 rather than silently returning something wrong.
+    api_key=os.getenv("OPENROUTER_API_KEY", "no-key-cached-runs-only"),
     base_url="https://openrouter.ai/api/v1",
 )
 

@@ -1,6 +1,9 @@
 .venv/
 .env
-runs/
+runs/*
+# The LLM cache is tracked so the eval suite runs deterministically and free on a
+# clean checkout, including in CI. Model output only, no keys.
+!runs/llm_cache.json
 __pycache__/
 .DS_Store
 .claude/settings.local.json

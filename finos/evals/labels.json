@@ -1,7 +1,7 @@
 {
   "gmail:msg-001": {
-    "label": "fail",
-    "why": "opens with the placeholder [Client's Name] instead of Nordwind Logistics GmbH, which the extractor got right"
+    "label": "pass",
+    "why": "re-labelled after the draft prompt fix. This was the [Client's Name] placeholder case; it now greets Nordwind Logistics GmbH and states 24,000 EUR net 30 correctly. The placeholder regression itself is pinned in tests, not here."
   },
   "gmail:msg-002": {
     "label": "fail",

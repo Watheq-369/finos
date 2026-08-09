@@ -1,13 +1,14 @@
 name: eval
 
-# Runs the offline half of the suite on every push and pull request.
-# The judge and the pipeline itself need the LLM cache, which lives in the
-# gitignored runs/ folder, so they stay a local command. See docs/backlog.md.
+# Runs the whole suite on every push and pull request.
+# runs/llm_cache.json is tracked, so the pipeline and the judge replay from cache:
+# no API key, no network, no cost, and identical results every time. A cache miss
+# means a prompt or a fixture changed, and it fails loudly rather than drifting.
 
 on: [push, pull_request]
 
 jobs:
-  offline-suite:
+  suite:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,4 +16,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pytest
-      - run: python -m pytest tests/ -q
+      - name: offline tests
+        run: python -m pytest tests/ -q
+      - name: eval suite and must-pass gates
+        run: python -m finos.score
