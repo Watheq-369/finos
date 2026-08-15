@@ -17,8 +17,19 @@ class BillingClient(Protocol):
     def match_or_create_customer(self, name: str, email: Optional[str]) -> str:
         """Return a customer id. Idempotent on name."""
 
+    def invoiced_by(self, event: ContractEvent) -> Optional[str]:
+        """Which event already invoiced this client, amount and currency, if any.
+
+        Returns that event's id, or None. `dedup.check_duplicate` calls this before
+        anything is billed, so an implementation that gets it wrong bills twice.
+        """
+
     def create_draft_invoice(self, event: ContractEvent) -> str:
-        """Return a draft invoice id. Refuses duplicates (see mock billing)."""
+        """Return a DRAFT invoice id. Never finalises and never sends.
+
+        Idempotent: the same client, amount and currency returns the existing draft
+        rather than creating a second one.
+        """
 
 
 class TraceStore(Protocol):

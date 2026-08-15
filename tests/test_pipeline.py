@@ -3,12 +3,15 @@
 Nothing here touches the network. The ingest client's HTTP call is stubbed.
 """
 
+import pytest
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from finos.adapters.mock_inbox import MockInbox
 from finos.adapters.slack_mock import PICKUP_TAG, SlackMock
 from finos.billing.mock_billing import MockBilling
+from finos.billing.stripe import StripeBilling, _minor_units, _signature
 from finos.models import ContractEvent, Route, Source, TrustLevel
 from finos.pipeline.classify import is_internal
 from finos.pipeline.dedup import check_duplicate
@@ -342,3 +345,62 @@ def test_the_injection_case_names_what_must_never_appear():
     assert "attacker@x.com" in injection["expected"]["must_not_appear"]
     assert "attacker@x.com" in injection["text"], "the bait must really be in the message"
     assert injection["expected_route"] in {"HOLD", "FLAG"}, "never a route that bills"
+
+
+# --- Stripe billing client: offline. Nothing here constructs a live session. ---
+
+
+def test_stripe_refuses_a_missing_key(monkeypatch):
+    monkeypatch.delenv("STRIPE_RESTRICTED_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="must be set"):
+        StripeBilling()
+
+
+def test_stripe_refuses_a_live_key():
+    """The one mistake that cannot be undone is billing a real client from a test run."""
+    for live_key in ["sk_live_abc123", "rk_live_abc123"]:
+        with pytest.raises(RuntimeError, match="not a Stripe TEST key"):
+            StripeBilling(api_key=live_key)
+
+
+def test_stripe_refuses_anything_that_is_not_a_stripe_key():
+    with pytest.raises(RuntimeError, match="not a Stripe TEST key"):
+        StripeBilling(api_key="c29tZS1vdGhlci1zZXJ2aWNlLXNlY3JldA==")
+
+
+def test_stripe_accepts_a_test_key():
+    assert StripeBilling(api_key="rk_test_abc123").api_key == "rk_test_abc123"
+
+
+def test_stripe_and_mock_agree_on_what_makes_two_invoices_the_same():
+    """Both dedup on client|amount|currency. If these drift, one of them double-bills."""
+    from finos.billing.mock_billing import _signature as mock_signature
+
+    event = make_event()
+
+    assert _signature(event) == mock_signature(event)
+
+
+def test_amounts_are_converted_to_the_smallest_currency_unit():
+    assert _minor_units(Decimal("12500")) == 1250000
+    assert _minor_units(Decimal("6000.50")) == 600050
+    assert _minor_units(Decimal("0.01")) == 1
+
+
+def test_both_billing_clients_implement_the_whole_interface():
+    """The point of the seam: Stripe drops in behind BillingClient without a rewrite."""
+    required = ["match_or_create_customer", "invoiced_by", "create_draft_invoice"]
+
+    for client in (MockBilling, StripeBilling):
+        missing = [name for name in required if not callable(getattr(client, name, None))]
+        assert not missing, f"{client.__name__} is missing {missing}"
+
+
+def test_the_scorer_never_bills_through_stripe():
+    """score.py calls run_all() with no arguments; billing must default to the mock."""
+    import inspect
+
+    from finos.run import run_all
+
+    assert inspect.signature(run_all).parameters["use_stripe"].default is False

@@ -80,13 +80,29 @@ def sources() -> dict[Source, SourceAdapter]:
     return {Source.GMAIL: MockInbox(), Source.SLACK: SlackMock()}
 
 
-def run_all(push: bool = False) -> list[ContractEvent]:
-    """Run every email in the mock inbox through the pipeline. Returns the finished events.
+def run_all(push: bool = False, use_stripe: bool = False) -> list[ContractEvent]:
+    """Run every message from every source through the pipeline. Returns the finished events.
 
-    `push` is opt-in so the scorer and the tests never touch the network.
+    `push` and `use_stripe` are both opt-in, so the scorer and the tests never touch the
+    network and never need a key. Billing stays mocked unless you ask for Stripe by name.
     """
     adapters = sources()
-    billing = MockBilling()
+    if use_stripe:
+        # Imported here, not at module load, so a checkout with no Stripe SDK and no key
+        # can still run the whole offline suite.
+        from finos.billing.stripe import StripeBilling
+
+        try:
+            billing = StripeBilling()
+        except RuntimeError as error:
+            # Config problem, not a crash. Say it plainly instead of dumping a traceback.
+            print(f"\ncannot use Stripe: {error}")
+            print("Nothing was sent to Stripe. Fix STRIPE_RESTRICTED_KEY in .env, or drop "
+                  "--stripe to run on the mock.")
+            raise SystemExit(1)
+        print("billing: REAL Stripe (test mode). Drafts only, nothing is finalised or sent.\n")
+    else:
+        billing = MockBilling()
     trace = LocalTrace()
     drafts: dict[str, str] = {}
 
@@ -118,8 +134,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the FinOS pipeline over the mock inbox.")
     parser.add_argument("--mock", action="store_true", help="use the mock inbox and mock billing")
     parser.add_argument("--push", action="store_true", help="also push the results to the review queue")
+    parser.add_argument("--stripe", action="store_true",
+                        help="bill through real Stripe in test mode instead of the mock (drafts only)")
     args = parser.parse_args()
-    run_all(push=args.push)
+    run_all(push=args.push, use_stripe=args.stripe)
 
 
 if __name__ == "__main__":
