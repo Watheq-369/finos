@@ -5,6 +5,7 @@ Nothing here touches the network. The ingest client's HTTP call is stubbed.
 
 import json
 
+import httpx
 import pytest
 
 from datetime import datetime, timezone
@@ -31,6 +32,8 @@ from finos.evals.trajectory import (
     paths_from_trace,
 )
 from finos.store import ingest
+from finos.store import http_queue
+from finos.store.http_queue import HttpReviewQueue, base_url
 from finos.store.stub_queue import StubReviewQueue
 from finos.worker import process
 from finos.store.ingest import IngestClient, rows_for
@@ -555,3 +558,111 @@ def test_both_billing_clients_can_finalise():
     for client in (MockBilling, StripeBilling):
         for name in ("invoice_status", "finalise_invoice"):
             assert callable(getattr(client, name, None)), f"{client.__name__}.{name}"
+
+
+# --- the live review queue: HTTP stubbed, so the suite stays offline ---
+
+
+def test_the_app_host_is_derived_from_the_ingest_url(monkeypatch):
+    """One host, two secrets. Nothing hardcoded."""
+    monkeypatch.delenv("REVIEW_APP_URL", raising=False)
+    monkeypatch.setenv("INGEST_URL", "https://app.example.test/api/public/ingest")
+
+    assert base_url() == "https://app.example.test"
+
+
+def test_an_explicit_review_app_url_wins(monkeypatch):
+    monkeypatch.setenv("REVIEW_APP_URL", "https://other.example.test/")
+    monkeypatch.setenv("INGEST_URL", "https://app.example.test/api/public/ingest")
+
+    assert base_url() == "https://other.example.test"
+
+
+def test_the_queue_refuses_to_start_without_the_send_secret(monkeypatch):
+    monkeypatch.delenv("SEND_SECRET", raising=False)
+
+    with pytest.raises(RuntimeError, match="SEND_SECRET"):
+        HttpReviewQueue(base="https://app.example.test")
+
+
+def test_approved_rows_sends_the_bearer_and_returns_the_rows(monkeypatch):
+    sent = {}
+
+    class StubResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [{"event_id": "gmail:a", "status": "approved"}]
+
+    def stub_get(url, headers, timeout):
+        sent.update(url=url, headers=headers)
+        return StubResponse()
+
+    monkeypatch.setattr(http_queue.httpx, "get", stub_get)
+
+    rows = HttpReviewQueue(base="https://app.example.test", secret="s3cret").approved_rows()
+
+    assert sent["url"] == "https://app.example.test/api/public/approved"
+    assert sent["headers"]["Authorization"] == "Bearer s3cret"
+    assert rows == [{"event_id": "gmail:a", "status": "approved"}]
+
+
+def test_mark_sent_posts_the_event_and_invoice_id(monkeypatch):
+    sent = {}
+
+    class StubResponse:
+        def raise_for_status(self):
+            pass
+
+    def stub_post(url, json, headers, timeout):
+        sent.update(url=url, body=json, headers=headers)
+        return StubResponse()
+
+    monkeypatch.setattr(http_queue.httpx, "post", stub_post)
+
+    HttpReviewQueue(base="https://app.example.test", secret="s3cret").mark_sent("gmail:a", "in_1")
+
+    assert sent["url"] == "https://app.example.test/api/public/mark-sent"
+    assert sent["body"] == {"event_id": "gmail:a", "stripe_invoice_id": "in_1"}
+    assert sent["headers"]["Authorization"] == "Bearer s3cret"
+
+
+def test_a_non_list_response_is_refused_rather_than_acted_on(monkeypatch):
+    """Never act on a shape we do not understand."""
+
+    class StubResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"error": "something went wrong"}
+
+    monkeypatch.setattr(http_queue.httpx, "get", lambda url, headers, timeout: StubResponse())
+
+    with pytest.raises(RuntimeError, match="list of rows"):
+        HttpReviewQueue(base="https://app.example.test", secret="s3cret").approved_rows()
+
+
+def test_a_failed_read_stops_the_worker_before_it_finalises_anything(monkeypatch, tmp_path):
+    """A 401 must never be treated as 'no approved rows'."""
+
+    class Boom:
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError(
+                "401", request=httpx.Request("GET", "https://app.example.test"),
+                response=httpx.Response(401))
+
+        def json(self):
+            return []
+
+    monkeypatch.setattr(http_queue.httpx, "get", lambda url, headers, timeout: Boom())
+    queue = HttpReviewQueue(base="https://app.example.test", secret="wrong")
+    billing = billing_with_draft(tmp_path)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        process(queue, billing, send=True)
+
+    assert billing.invoice_status("inv-001") == "draft"  # nothing was touched

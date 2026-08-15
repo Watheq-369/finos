@@ -1,8 +1,8 @@
 """The approval-gated worker. Finalises invoices a human already approved. Nothing else.
 
-    python -m finos.worker                    dry run, mock billing. Touches nothing.
-    python -m finos.worker --stripe           dry run against real Stripe. Still touches nothing.
-    python -m finos.worker --stripe --send    the real thing: finalise and mark sent.
+    python -m finos.worker                           dry run, stub queue, mock billing. Touches nothing.
+    python -m finos.worker --http --stripe           dry run against the live queue and real Stripe.
+    python -m finos.worker --http --stripe --send    the real thing: finalise and mark sent.
 
 Three locks sit between a contract and a finalised invoice:
 
@@ -17,6 +17,8 @@ cannot. It does NOT deliver anything to the customer.
 """
 
 import argparse
+
+import httpx
 
 from finos.billing.mock_billing import MockBilling
 from finos.interfaces import BillingClient, ReviewQueue
@@ -66,13 +68,26 @@ def process(queue: ReviewQueue, billing: BillingClient, send: bool = False) -> d
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Finalise invoices for review-queue rows a human approved.")
+    parser.add_argument("--http", action="store_true",
+                        help="read the live review queue instead of the local stub")
     parser.add_argument("--stripe", action="store_true",
                         help="use real Stripe in test mode instead of the mock")
     parser.add_argument("--send", action="store_true",
                         help="actually finalise and mark sent. Without this it is a dry run.")
     args = parser.parse_args()
 
-    queue = StubReviewQueue()
+    if args.http:
+        # Imported here so the offline path needs neither the endpoints nor the secret.
+        from finos.store.http_queue import HttpReviewQueue
+
+        try:
+            queue = HttpReviewQueue()
+        except RuntimeError as error:
+            print(f"\ncannot reach the review queue: {error}")
+            raise SystemExit(1)
+    else:
+        queue = StubReviewQueue()
+
     if args.stripe:
         # Imported here so a checkout with no Stripe SDK can still run the dry path.
         from finos.billing.stripe import StripeBilling
@@ -88,9 +103,18 @@ def main() -> None:
 
     mode = "SEND (invoices will be finalised)" if args.send else "DRY RUN (nothing will change)"
     engine = "real Stripe, test mode" if args.stripe else "mock billing"
-    print(f"worker: {mode}, billing: {engine}\n")
+    source = f"live review queue at {queue.base}" if args.http else "local stub queue"
+    print(f"worker: {mode}, billing: {engine}, queue: {source}\n")
 
-    tally = process(queue, billing, send=args.send)
+    try:
+        tally = process(queue, billing, send=args.send)
+    except httpx.HTTPStatusError as error:
+        # Never act on a partial or failed read. Say what happened in plain language.
+        code = error.response.status_code
+        hint = " (check SEND_SECRET matches the value in Lovable Secrets)" if code == 401 else ""
+        print(f"\nreview queue FAILED: the endpoint answered {code} for {error.request.url}{hint}")
+        print("Nothing was finalised and nothing was marked sent.")
+        raise SystemExit(1)
 
     print(f"\napproved: {tally['approved']}  finalised: {tally['finalised']}  "
           f"skipped: {tally['skipped']}  would finalise: {tally['would_finalise']}")
