@@ -46,6 +46,24 @@ class MockBilling:
         existing = self.invoices.get(_signature(event))
         return existing["event_id"] if existing else None
 
+    def invoice_status(self, invoice_id: str) -> str:
+        """draft until something finalises it. Mirrors Stripe's own vocabulary."""
+        for record in self.invoices.values():
+            if record["invoice_id"] == invoice_id:
+                return record.get("status", "draft")
+        raise KeyError(f"no invoice {invoice_id}")
+
+    def finalise_invoice(self, invoice_id: str) -> str:
+        """draft -> open. Refuses to finalise anything that is not still a draft."""
+        for record in self.invoices.values():
+            if record["invoice_id"] == invoice_id:
+                if record.get("status", "draft") != "draft":
+                    return record["status"]
+                record["status"] = "open"
+                self._save()
+                return "open"
+        raise KeyError(f"no invoice {invoice_id}")
+
     def create_draft_invoice(self, event: ContractEvent) -> str:
         signature = _signature(event)
         if signature not in self.invoices:

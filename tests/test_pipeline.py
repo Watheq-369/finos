@@ -3,6 +3,8 @@
 Nothing here touches the network. The ingest client's HTTP call is stubbed.
 """
 
+import json
+
 import pytest
 
 from datetime import datetime, timezone
@@ -29,6 +31,8 @@ from finos.evals.trajectory import (
     paths_from_trace,
 )
 from finos.store import ingest
+from finos.store.stub_queue import StubReviewQueue
+from finos.worker import process
 from finos.store.ingest import IngestClient, rows_for
 
 
@@ -453,3 +457,101 @@ def test_stripe_reads_metadata_the_only_way_that_works(monkeypatch):
     # The whole point: a re-run finds the existing draft instead of creating a second one.
     assert billing.invoiced_by(event) == "slack:C1-123.456"
     assert billing.create_draft_invoice(event) == "in_existing"
+
+
+# --- the worker: nothing moves without a human approval and an explicit flag ---
+
+
+def queue_with(tmp_path, rows) -> StubReviewQueue:
+    path = tmp_path / "review_queue.json"
+    path.write_text(json.dumps(rows))
+    return StubReviewQueue(store_path=path)
+
+
+def billing_with_draft(tmp_path, invoice_id="inv-001") -> MockBilling:
+    billing = MockBilling(store_path=tmp_path / "invoices.json")
+    billing.create_draft_invoice(make_event())
+    assert billing.invoice_status(invoice_id) == "draft"
+    return billing
+
+
+ROW = {"event_id": "gmail:test-001", "client_name": "Test GmbH", "invoice_amount": 1000,
+       "currency": "EUR", "stripe_invoice_id": "inv-001"}
+
+
+def test_the_queue_returns_only_approved_rows(tmp_path):
+    """The approval gate. Everything else in the worker depends on this filter."""
+    queue = queue_with(tmp_path, [
+        {**ROW, "event_id": "a", "status": "approved"},
+        {**ROW, "event_id": "b", "status": "pending"},
+        {**ROW, "event_id": "c", "status": "flagged"},
+        {**ROW, "event_id": "d", "status": "rejected"},
+        {**ROW, "event_id": "e", "status": "sent"},
+    ])
+
+    assert [row["event_id"] for row in queue.approved_rows()] == ["a"]
+
+
+def test_a_dry_run_changes_nothing(tmp_path):
+    queue = queue_with(tmp_path, [{**ROW, "status": "approved"}])
+    billing = billing_with_draft(tmp_path)
+
+    tally = process(queue, billing, send=False)
+
+    assert tally == {"approved": 1, "finalised": 0, "skipped": 0, "would_finalise": 1}
+    assert billing.invoice_status("inv-001") == "draft"       # untouched
+    assert queue.rows[0]["status"] == "approved"              # untouched
+
+
+def test_send_finalises_the_invoice_and_marks_the_row(tmp_path):
+    queue = queue_with(tmp_path, [{**ROW, "status": "approved"}])
+    billing = billing_with_draft(tmp_path)
+
+    tally = process(queue, billing, send=True)
+
+    assert tally["finalised"] == 1
+    assert billing.invoice_status("inv-001") == "open"
+    assert queue.rows[0]["status"] == "sent"
+    assert queue.rows[0]["stripe_invoice_id"] == "inv-001"
+
+
+def test_running_twice_never_finalises_twice(tmp_path):
+    """The idempotency proof, offline. A re-run must be a safe no-op."""
+    queue = queue_with(tmp_path, [{**ROW, "status": "approved"}])
+    billing = billing_with_draft(tmp_path)
+
+    process(queue, billing, send=True)
+    second = process(queue, billing, send=True)
+
+    assert second == {"approved": 0, "finalised": 0, "skipped": 0, "would_finalise": 0}
+    assert billing.invoice_status("inv-001") == "open"
+
+
+def test_an_already_open_invoice_is_skipped_even_if_the_row_says_approved(tmp_path):
+    """Belt and braces: if the row and Stripe disagree, Stripe's status wins."""
+    queue = queue_with(tmp_path, [{**ROW, "status": "approved"}])
+    billing = billing_with_draft(tmp_path)
+    billing.finalise_invoice("inv-001")
+
+    tally = process(queue, billing, send=True)
+
+    assert tally == {"approved": 1, "finalised": 0, "skipped": 1, "would_finalise": 0}
+    assert queue.rows[0]["status"] == "approved"  # not marked sent, because nothing was sent
+
+
+def test_a_row_with_no_invoice_id_is_skipped_not_guessed(tmp_path):
+    queue = queue_with(tmp_path, [{**ROW, "status": "approved", "stripe_invoice_id": None}])
+    billing = billing_with_draft(tmp_path)
+
+    tally = process(queue, billing, send=True)
+
+    assert tally["skipped"] == 1 and tally["finalised"] == 0
+
+
+def test_both_billing_clients_can_finalise():
+    """Same seam as before: the worker must not care which one it holds."""
+    from finos.billing.stripe import StripeBilling
+
+    for client in (MockBilling, StripeBilling):
+        for name in ("invoice_status", "finalise_invoice"):
+            assert callable(getattr(client, name, None)), f"{client.__name__}.{name}"

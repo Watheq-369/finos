@@ -31,6 +31,30 @@ class BillingClient(Protocol):
         rather than creating a second one.
         """
 
+    def invoice_status(self, invoice_id: str) -> str:
+        """Stripe's own status: draft, open, paid, void, uncollectible.
+
+        The worker reads this before acting, so an already-finalised invoice is a no-op
+        rather than a second finalise.
+        """
+
+    def finalise_invoice(self, invoice_id: str) -> str:
+        """Move a draft to open. Returns the new status.
+
+        This is the one irreversible step in the system, which is why it sits behind a
+        human approval and an explicit flag. It does NOT deliver anything to the customer.
+        """
+
+
+class ReviewQueue(Protocol):
+    """The rows a human has acted on. A stub locally, the Lovable endpoints later."""
+
+    def approved_rows(self) -> list[dict]:
+        """Rows the owner approved that have not been sent yet. Never anything else."""
+
+    def mark_sent(self, event_id: str, stripe_invoice_id: str) -> None:
+        """Record the send: store the invoice id and flip the row to sent."""
+
 
 class TraceStore(Protocol):
     def write(self, event_id: str, stage: str, payload: dict) -> None:

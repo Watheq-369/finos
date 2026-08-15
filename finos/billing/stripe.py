@@ -1,13 +1,17 @@
-"""Real Stripe billing client, the system of record. Drafts only, never sends.
+"""Real Stripe billing client, the system of record.
 
 Same contract as MockBilling, so the pipeline cannot tell them apart. Stripe owns invoice
 numbering, tax and payment status; we do not reimplement any of it.
 
-Two safety properties matter more than anything else here:
+Three safety properties matter more than anything else here:
 
-1. **Draft only.** `auto_advance=False` and nothing in this file ever calls
-   `finalize_invoice` or `send_invoice`. A draft sits in Stripe waiting for a human.
-2. **One invoice per contract.** The event id and a client|amount|currency signature are
+1. **The pipeline only ever creates drafts.** `create_draft_invoice` sets
+   `auto_advance=False` and never finalises. A draft sits in Stripe waiting for a human.
+2. **Finalising is separate, and gated.** `finalise_invoice` exists for the worker, which
+   only acts on rows a human approved and only behind an explicit `--send` flag. It also
+   passes `auto_advance=False`, so Stripe does not deliver or dun on its own. Nothing here
+   ever calls `send_invoice`; customer delivery is a deliberate future step.
+3. **One invoice per contract.** The event id and a client|amount|currency signature are
    written into invoice metadata, and looked up before creating anything. Running the
    pipeline twice returns the existing draft instead of billing a client twice.
 
@@ -132,3 +136,23 @@ class StripeBilling:
         )
         self._invoices[signature] = {"invoice_id": invoice.id, "event_id": event.event_id}
         return invoice.id
+
+    def invoice_status(self, invoice_id: str) -> str:
+        """Read Stripe's own status. Always fetched live, never cached: the worker's
+        idempotency depends on this being current, not on what we remember."""
+        return stripe_sdk.Invoice.retrieve(invoice_id, api_key=self.api_key).status
+
+    def finalise_invoice(self, invoice_id: str) -> str:
+        """Move a draft to open. Refuses anything that is not still a draft.
+
+        `auto_advance=False` matters: it stops Stripe from progressing the invoice on its
+        own, which is what would otherwise email the customer and start dunning. Finalising
+        is the action here; delivery to the client is a deliberate future step.
+        """
+        status = self.invoice_status(invoice_id)
+        if status != "draft":
+            return status
+        invoice = stripe_sdk.Invoice.finalize_invoice(
+            invoice_id, api_key=self.api_key, auto_advance=False
+        )
+        return invoice.status
