@@ -666,3 +666,79 @@ def test_a_failed_read_stops_the_worker_before_it_finalises_anything(monkeypatch
         process(queue, billing, send=True)
 
     assert billing.invoice_status("inv-001") == "draft"  # nothing was touched
+
+
+# --- the row carries the invoice the worker will finalise ---
+
+
+def test_an_invoice_row_carries_its_stripe_invoice_id():
+    rows = rows_for([make_event()], drafts={}, invoice_ids={"gmail:test-001": "in_abc123"})
+
+    assert rows[0]["stripe_invoice_id"] == "in_abc123"
+
+
+def test_a_flagged_row_carries_no_invoice_id():
+    event = validate(make_event(invoice_amount=None))
+
+    row = rows_for([event], drafts={}, invoice_ids={})[0]
+
+    assert row["status"] == "flagged"
+    assert row["stripe_invoice_id"] is None
+
+
+def test_rows_without_invoice_ids_still_build():
+    """The mock path pushes no ids at all; the field must simply be null, not missing."""
+    row = rows_for([make_event()], drafts={})[0]
+
+    assert "stripe_invoice_id" in row
+    assert row["stripe_invoice_id"] is None
+
+
+def test_a_finalised_invoice_still_counts_as_already_invoiced(monkeypatch):
+    """Regression: once the worker finalises an invoice it is no longer a draft.
+
+    If the index only held drafts, the next pipeline run would not see it, would believe
+    the contract was never invoiced, and would raise a SECOND invoice for the same client,
+    amount and currency. That is a wrong invoice.
+    """
+    listed = {}
+
+    class StripeObjectStub:
+        def __init__(self, data):
+            self._data = data
+
+        def __getattr__(self, name):
+            raise AttributeError(name)
+
+        def to_dict(self):
+            return dict(self._data)
+
+    class OpenInvoice:
+        id = "in_already_open"
+        status = "open"
+        metadata = StripeObjectStub({
+            "finos_event_id": "gmail:test-001",
+            "finos_signature": "test gmbh|1000|EUR",
+        })
+
+    class Listing:
+        def __init__(self, items):
+            self.items = items
+
+        def auto_paging_iter(self):
+            return iter(self.items)
+
+    def spy_list(**kwargs):
+        listed.update(kwargs)
+        return Listing([OpenInvoice()])
+
+    monkeypatch.setattr(stripe_billing.stripe_sdk.Customer, "list", lambda **kw: Listing([]))
+    monkeypatch.setattr(stripe_billing.stripe_sdk.Invoice, "list", spy_list)
+
+    billing = StripeBilling(api_key="rk_test_abc123")
+    event = make_event()
+
+    assert billing.invoiced_by(event) == "gmail:test-001"
+    assert billing.create_draft_invoice(event) == "in_already_open"
+    # Checked after the lazy load has actually run, or it proves nothing.
+    assert "status" not in listed, "the listing must not filter to drafts only"

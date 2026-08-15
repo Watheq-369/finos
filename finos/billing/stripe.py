@@ -76,8 +76,12 @@ class StripeBilling:
         for customer in stripe_sdk.Customer.list(api_key=self.api_key, limit=100).auto_paging_iter():
             if customer.name:
                 self._customers.setdefault(customer.name.strip().lower(), customer.id)
+        # EVERY status, not just draft. Once the worker finalises an invoice it leaves
+        # draft, and if the index only held drafts the next pipeline run would not see it,
+        # would believe the contract was never invoiced, and would raise a second one.
+        # That is a wrong invoice, which is the one thing this system must never do.
         for invoice in stripe_sdk.Invoice.list(
-            api_key=self.api_key, status="draft", limit=100
+            api_key=self.api_key, limit=100
         ).auto_paging_iter():
             # Stripe returns metadata as a StripeObject, not a dict: it has no .get() and
             # dict() on it raises. to_dict() is the only safe read, and it copes with empty

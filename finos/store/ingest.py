@@ -21,8 +21,14 @@ load_dotenv()
 STATUS_BY_ROUTE = {Route.INVOICE: "pending", Route.FLAG: "flagged"}
 
 
-def to_review_row(event: ContractEvent, draft_email: Optional[str]) -> dict:
-    """Shape one finished event as a review_queue row."""
+def to_review_row(event: ContractEvent, draft_email: Optional[str],
+                  stripe_invoice_id: Optional[str] = None) -> dict:
+    """Shape one finished event as a review_queue row.
+
+    `stripe_invoice_id` is the draft the pipeline created in Stripe. The worker finalises
+    exactly that invoice after a human approves the row, so without it an approved row has
+    nothing to act on. It is None for FLAG rows, which have no invoice.
+    """
     return {
         "event_id": event.event_id,
         "source": event.source.value,
@@ -35,14 +41,17 @@ def to_review_row(event: ContractEvent, draft_email: Optional[str]) -> dict:
         "tax_id": event.tax_id,
         "flags": event.flags,
         "draft_email": draft_email,
+        "stripe_invoice_id": stripe_invoice_id,
         "status": STATUS_BY_ROUTE[event.route],
     }
 
 
-def rows_for(events: list[ContractEvent], drafts: dict[str, str]) -> list[dict]:
+def rows_for(events: list[ContractEvent], drafts: dict[str, str],
+             invoice_ids: Optional[dict[str, str]] = None) -> list[dict]:
     """The INVOICE and FLAG rows from a run, in corpus order."""
+    invoice_ids = invoice_ids or {}
     return [
-        to_review_row(event, drafts.get(event.event_id))
+        to_review_row(event, drafts.get(event.event_id), invoice_ids.get(event.event_id))
         for event in events
         if event.route in STATUS_BY_ROUTE
     ]

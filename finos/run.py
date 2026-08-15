@@ -30,11 +30,13 @@ def process_one(
     billing: MockBilling,
     trace: LocalTrace,
     drafts: dict[str, str],
+    invoice_ids: dict[str, str],
 ) -> str:
     """Run one email through every stage. Returns the one-line summary.
 
-    Any covering email written along the way is recorded in `drafts`, so the
-    review queue can show the owner what would go out.
+    Any covering email written along the way is recorded in `drafts`, and the invoice id
+    in `invoice_ids`, so the review queue can show the owner what would go out and the
+    worker knows which invoice to finalise once they approve it.
     """
     classify(event, email_text)
     trace.write(event.event_id, "classify", {"route": event.route, "confidence": event.confidence})
@@ -57,6 +59,7 @@ def process_one(
     customer_id = billing.match_or_create_customer(event.client_name, event.client_email)
     was_duplicate = billing.invoiced_by(event) is not None
     invoice_id = billing.create_draft_invoice(event)
+    invoice_ids[event.event_id] = invoice_id
     trace.write(event.event_id, "billing", {
         "customer_id": customer_id,
         "invoice_id": invoice_id,
@@ -105,18 +108,21 @@ def run_all(push: bool = False, use_stripe: bool = False) -> list[ContractEvent]
         billing = MockBilling()
     trace = LocalTrace()
     drafts: dict[str, str] = {}
+    invoice_ids: dict[str, str] = {}
 
     events = [event for adapter in adapters.values() for event in adapter.fetch()]
     for event in events:
         message_text = adapters[event.source].read_raw(event.raw_ref)
-        print(process_one(event, message_text, billing, trace, drafts))
+        print(process_one(event, message_text, billing, trace, drafts, invoice_ids))
 
     routes = Counter(event.route.value for event in events)
     print("\n" + "  ".join(f"{route}: {count}" for route, count in sorted(routes.items())))
     print(f"trace written to {trace.trace_path}")
 
     if push:
-        rows = rows_for(events, drafts)
+        # Only real Stripe ids go into a field named stripe_invoice_id. A mock id like
+        # "inv-001" written there would be a lie, and the worker would try to finalise it.
+        rows = rows_for(events, drafts, invoice_ids if use_stripe else {})
         try:
             result = IngestClient().push(rows)
             print(f"\npushed {len(rows)} rows to the ingest endpoint")
