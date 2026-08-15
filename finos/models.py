@@ -16,10 +16,10 @@ class Route(str, Enum):
 
 
 class Source(str, Enum):
-    GMAIL = "gmail"
-    HUBSPOT = "hubspot"
-    FORM = "form"
-    STRIPE = "stripe"
+    SLACK = "slack"  # the one live source
+    GMAIL = "gmail"  # dormant, kept as the mock corpus and the swap-a-source example
+    HUBSPOT = "hubspot"  # dormant, not built
+    FORM = "form"  # dormant, not built
 
 
 class TrustLevel(str, Enum):

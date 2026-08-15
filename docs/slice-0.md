@@ -1,5 +1,7 @@
 # Slice 0: Scaffold, Schema, and Mock Pipeline
 
+> **Historical record of shipped work.** Written before the Slack/Stripe pivot, so it describes Gmail as the source and QuickBooks as the billing system of record. Kept as an accurate account of what was built and why. The current architecture is in CLAUDE.md.
+
 **Related:** PRD v1 (the Spine), Contract Email Corpus v1 (now in `fixtures/emails.json`)
 
 This is the first thing to build. It creates the skeleton of the FinOS agent and gets the whole pipeline running end to end against mock data, with no real Gmail and no real QuickBooks yet. Correctness is not the goal here. A wired, running spine is. Real extraction accuracy and the abstain rules come in Slice 1.

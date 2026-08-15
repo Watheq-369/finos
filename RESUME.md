@@ -1,6 +1,6 @@
 # RESUME - where we are and what to do next
 
-**Last session:** Slices 0, 1, 2 and 4 shipped, tested, committed. A live published review app (invoice-review-queue.lovable.app) with the pipeline feeding it end to end through a secure ingest endpoint. The repo now has a README and a live CI workflow (`.github/workflows/eval.yml`) that runs the whole suite from the committed LLM cache on every push and pull request. Backlog is current.
+**Last session:** Slice A shipped: the repo pivoted to **Slack in, Stripe out**, and a Slack source adapter runs mock-first alongside the email corpus. Slices 0, 1, 2 and 4 shipped before that. A live published review app (invoice-review-queue.lovable.app) with the pipeline feeding it end to end through a secure ingest endpoint. The repo now has a README and a live CI workflow (`.github/workflows/eval.yml`) that runs the whole suite from the committed LLM cache on every push and pull request. Backlog is current.
 
 ## Done: Slice 4 - Evals (the TRACE loop)
 
@@ -8,9 +8,13 @@ Built per `docs/slice-4.md`: trajectory grading, an LLM judge on draft quality v
 
 The msg-002 schedule blind spot is closed: the extractor was copying the "50% upfront" example onto a three-milestone contract. Schedule is now graded by instalment count against the golden set and is 9/9, with a must-pass gate.
 
-## Next build: Slice 3 - real Gmail + QuickBooks
+## Next build: Slice B - Stripe adapter + approval-gated worker (mock-first)
 
-Not started. OAuth is the friction point.
+Not started. Waiting on your go.
+
+Adds `billing/stripe.py` behind the existing `BillingClient` interface with a mock-first path that records "would create and send invoice X" without calling anything, plus the worker that fetches approved-and-unsent rows via `GET /api/public/approved`, calls the billing client to create/finalise/send, and reports back via `POST /api/public/mark-sent`. Both endpoints bearer-authenticated on the Lovable side, service_role hidden. Invariant tests: nothing is sent unless the row is `approved`, an approved row sends exactly once, and the worker holds only a restricted key.
+
+Then Slice C (docs/slice-3.md): both mocks swapped for the real thing behind the same interfaces.
 
 ## To resume in Claude Code (VS Code)
 
@@ -32,7 +36,7 @@ Advance the slice pointer in CLAUDE.md to Slice 4 (spec: docs/slice-4.md), then 
 
 ## Parked, in docs/backlog.md, not blocking
 
-- Your decision: unknown-VAT domestic invoices, abstain or let QuickBooks default them at Slice 3.
+- Your decision: unknown-VAT domestic invoices, abstain or let Stripe default them at Slice B/C.
 - Free security hardening in Lovable ("Try to fix all") before demo day.
 
 ## Also outstanding, minor

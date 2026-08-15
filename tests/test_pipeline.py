@@ -7,11 +7,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from finos.adapters.mock_inbox import MockInbox
+from finos.adapters.slack_mock import PICKUP_TAG, SlackMock
 from finos.billing.mock_billing import MockBilling
 from finos.models import ContractEvent, Route, Source, TrustLevel
 from finos.pipeline.classify import is_internal
 from finos.pipeline.dedup import check_duplicate
 from finos.pipeline.validate import validate
+from finos.run import sources
+from finos.score import GRADED_FIELDS
 from finos.evals.judge import agreement, has_placeholder, load_labels
 from finos.evals.trajectory import (
     ABSTAIN_PATH,
@@ -257,3 +260,85 @@ def test_judge_agreement_counts_only_the_labelled_cases():
 
     assert (matched, checked) == (1, 2)
     assert "gmail:b" in disagreements[0]
+
+
+# --- the Slack source: only tagged messages become work ---
+
+
+def test_slack_adapter_emits_only_tagged_messages():
+    slack = SlackMock()
+
+    events = slack.fetch()
+
+    assert len(slack.messages) == 3, "the fixture must include untagged chatter to test the filter"
+    assert len(events) == 2
+    assert [event.event_id for event in events] == list(slack.corpus())
+    assert all(event.event_id.startswith("slack:") for event in events)
+    assert all(event.source == Source.SLACK for event in events)
+    assert all(event.trust_level == TrustLevel.UNTRUSTED for event in events)
+
+
+def test_every_adapter_mints_the_ids_it_fetches():
+    """The scorer keys the golden set off corpus(); it must match what the run produced."""
+    for adapter in sources().values():
+        assert {event.event_id for event in adapter.fetch()} == set(adapter.corpus())
+
+
+def test_event_ids_do_not_collide_across_sources():
+    corpora = [adapter.corpus() for adapter in sources().values()]
+
+    merged = {key: value for corpus in corpora for key, value in corpus.items()}
+
+    assert len(merged) == sum(len(corpus) for corpus in corpora)
+
+
+def test_every_event_can_be_read_back_by_its_own_adapter():
+    """What run_all's dispatch relies on, checked without an LLM call."""
+    adapters = sources()
+    for source, adapter in adapters.items():
+        for event in adapter.fetch():
+            assert event.source is source
+            assert adapters[event.source].read_raw(event.raw_ref)
+
+
+def test_slack_sender_line_is_built_only_from_what_slack_vouches_for():
+    """is_internal reads line one. Nothing a sender types may reach it."""
+    slack = SlackMock()
+
+    for event in slack.fetch():
+        first_line = slack.read_raw(event.raw_ref).splitlines()[0]
+
+        assert first_line.startswith("From: ")
+        assert "attacker" not in first_line
+        assert not is_internal(slack.read_raw(event.raw_ref))
+
+
+def test_a_slack_post_from_our_own_domain_is_still_internal():
+    assert is_internal("From: sami@younesmotasam.com (Slack #contracts-inbound)")
+
+
+def test_the_pickup_tag_never_reaches_the_model():
+    """A subject line hinting 'invoice' would bias the very classifier we are testing."""
+    slack = SlackMock()
+
+    for event in slack.fetch():
+        assert PICKUP_TAG not in slack.read_raw(event.raw_ref).splitlines()[1]
+
+
+def test_every_golden_case_has_the_fields_the_scorer_reads():
+    """golden_value() does expected[field]; a missing key is a KeyError halfway through a run."""
+    for adapter in sources().values():
+        for event_id, fixture in adapter.corpus().items():
+            assert "expected_route" in fixture, event_id
+            missing = [f for f in GRADED_FIELDS if f not in fixture["expected"]]
+            assert not missing, f"{event_id} is missing {missing}"
+
+
+def test_the_injection_case_names_what_must_never_appear():
+    cases = [f for f in SlackMock().corpus().values() if f["expected"].get("must_not_appear")]
+
+    assert len(cases) == 1
+    injection = cases[0]
+    assert "attacker@x.com" in injection["expected"]["must_not_appear"]
+    assert "attacker@x.com" in injection["text"], "the bait must really be in the message"
+    assert injection["expected_route"] in {"HOLD", "FLAG"}, "never a route that bills"

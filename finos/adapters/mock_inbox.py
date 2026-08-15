@@ -1,4 +1,9 @@
-"""Reads fixtures/emails.json and emits one ContractEvent per entry. Stands in for Gmail until Slice 3."""
+"""Reads fixtures/emails.json and emits one ContractEvent per entry.
+
+The 20-email corpus predates the Slack pivot and is kept because it is still valid message
+content and still the golden set the whole suite is graded against. Slack is the live source;
+this adapter is the regression corpus and the second source that proves the seam works.
+"""
 
 import json
 from datetime import datetime, timezone
@@ -13,17 +18,21 @@ class MockInbox:
     def __init__(self, fixtures_path: Path = FIXTURES_PATH):
         self.emails = json.loads(fixtures_path.read_text())
 
+    def corpus(self) -> dict[str, dict]:
+        """{event_id: fixture entry}. The only place a gmail event id is minted."""
+        return {f"gmail:{email['message_id']}": email for email in self.emails}
+
     def fetch(self) -> list[ContractEvent]:
         received_at = datetime.now(timezone.utc)
         return [
             ContractEvent(
-                event_id=f"gmail:{email['message_id']}",
+                event_id=event_id,
                 source=Source.GMAIL,
                 trust_level=TrustLevel.UNTRUSTED,
                 received_at=received_at,
                 raw_ref=f"fixtures/emails.json#{email['message_id']}",
             )
-            for email in self.emails
+            for event_id, email in self.corpus().items()
         ]
 
     def read_raw(self, raw_ref: str) -> str:

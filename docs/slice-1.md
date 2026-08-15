@@ -1,5 +1,7 @@
 # Slice 1: Correctness - Abstain Rules, Duplicate Detection, Extraction Grading
 
+> **Historical record of shipped work.** Written before the Slack/Stripe pivot. Kept as an accurate account of what was built and why. The current architecture is in CLAUDE.md.
+
 **Related:** PRD v1 (the Spine), Slice 0 (done), fixtures/emails.json (golden set with `expected` blocks)
 
 Slice 0 wired the pipeline. Slice 1 makes it get the right answer. The north star is **zero invented values** and every FLAG case actually flagging. Still plain Python, still mock rails. No LangGraph, no real integrations yet.

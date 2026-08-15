@@ -1,5 +1,7 @@
 # Slice 2: Review UI + Supabase (the human-send gate becomes real)
 
+> **Historical record of shipped work.** Written before the Slack/Stripe pivot. The review UI and the ingest endpoint it describes are still live and unchanged. The current architecture is in CLAUDE.md.
+
 **Related:** PRD v1, Slice 1 (done). This is the Builder "ship your product v1" surface. It is Lovable-first and browser-based, different from the Python slices. The pipeline logic barely changes; what changes is where its results go (Supabase) and that a person now sees them on a screen and acts on them.
 
 **Goal:** the pipeline's results land in a Supabase table; a Lovable review screen shows the pending invoices and the flagged cases; the owner clicks Approve & Send, Flag, or Reject, and that decision is recorded. This turns the human-send gate from a concept into a real screen. Navy editorial, not the dark demo dashboard.

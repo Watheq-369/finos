@@ -11,8 +11,10 @@ from collections import Counter
 import httpx
 
 from finos.adapters.mock_inbox import MockInbox
+from finos.adapters.slack_mock import SlackMock
 from finos.billing.mock_billing import MockBilling
-from finos.models import ContractEvent, Route
+from finos.interfaces import SourceAdapter
+from finos.models import ContractEvent, Route, Source
 from finos.pipeline.classify import classify
 from finos.pipeline.dedup import check_duplicate
 from finos.pipeline.draft import draft
@@ -69,20 +71,29 @@ def process_one(
     return f"{event.event_id:24} {event.route.value:8} {event.invoice_amount} {event.currency} -> {invoice_id} ({note})"
 
 
+def sources() -> dict[Source, SourceAdapter]:
+    """Every signal source this slice reads, keyed by the source its events carry.
+
+    The one place adapters are built. Order matters: sources are read in this order, and
+    dedup treats the first contract it sees as the original.
+    """
+    return {Source.GMAIL: MockInbox(), Source.SLACK: SlackMock()}
+
+
 def run_all(push: bool = False) -> list[ContractEvent]:
     """Run every email in the mock inbox through the pipeline. Returns the finished events.
 
     `push` is opt-in so the scorer and the tests never touch the network.
     """
-    inbox = MockInbox()
+    adapters = sources()
     billing = MockBilling()
     trace = LocalTrace()
     drafts: dict[str, str] = {}
 
-    events = inbox.fetch()
+    events = [event for adapter in adapters.values() for event in adapter.fetch()]
     for event in events:
-        email_text = inbox.read_raw(event.raw_ref)
-        print(process_one(event, email_text, billing, trace, drafts))
+        message_text = adapters[event.source].read_raw(event.raw_ref)
+        print(process_one(event, message_text, billing, trace, drafts))
 
     routes = Counter(event.route.value for event in events)
     print("\n" + "  ".join(f"{route}: {count}" for route, count in sorted(routes.items())))
