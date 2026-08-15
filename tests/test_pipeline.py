@@ -11,6 +11,7 @@ from decimal import Decimal
 from finos.adapters.mock_inbox import MockInbox
 from finos.adapters.slack_mock import PICKUP_TAG, SlackMock
 from finos.billing.mock_billing import MockBilling
+from finos.billing import stripe as stripe_billing
 from finos.billing.stripe import StripeBilling, _minor_units, _signature
 from finos.models import ContractEvent, Route, Source, TrustLevel
 from finos.pipeline.classify import is_internal
@@ -404,3 +405,51 @@ def test_the_scorer_never_bills_through_stripe():
     from finos.run import run_all
 
     assert inspect.signature(run_all).parameters["use_stripe"].default is False
+
+
+def test_stripe_reads_metadata_the_only_way_that_works(monkeypatch):
+    """Regression: Stripe returns metadata as a StripeObject, not a dict.
+
+    It has no .get() and dict() on it raises, so the obvious `(meta or {}).get(k)` blows up.
+    This only fires once the account already holds invoices, i.e. on the SECOND run, which
+    is exactly the run that proves we do not bill a client twice.
+    """
+
+    class StripeObjectStub:
+        """Mimics the real thing: subscriptable and to_dict()-able, but no .get()."""
+
+        def __init__(self, data):
+            self._data = data
+
+        def __getattr__(self, name):
+            raise AttributeError(name)  # .get() must fail, as it does in the SDK
+
+        def to_dict(self):
+            return dict(self._data)
+
+    class InvoiceStub:
+        id = "in_existing"
+        metadata = StripeObjectStub({
+            "finos_event_id": "slack:C1-123.456",
+            "finos_signature": "velasco partners s.l.|12500|EUR",
+        })
+
+    class Listing:
+        def __init__(self, items):
+            self.items = items
+
+        def auto_paging_iter(self):
+            return iter(self.items)
+
+    monkeypatch.setattr(stripe_billing.stripe_sdk.Customer, "list",
+                        lambda **kwargs: Listing([]))
+    monkeypatch.setattr(stripe_billing.stripe_sdk.Invoice, "list",
+                        lambda **kwargs: Listing([InvoiceStub()]))
+
+    billing = StripeBilling(api_key="rk_test_abc123")
+    event = make_event(client_name="Velasco Partners S.L.",
+                       invoice_amount=Decimal("12500"), currency="EUR")
+
+    # The whole point: a re-run finds the existing draft instead of creating a second one.
+    assert billing.invoiced_by(event) == "slack:C1-123.456"
+    assert billing.create_draft_invoice(event) == "in_existing"

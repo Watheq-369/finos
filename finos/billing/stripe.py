@@ -75,11 +75,16 @@ class StripeBilling:
         for invoice in stripe_sdk.Invoice.list(
             api_key=self.api_key, status="draft", limit=100
         ).auto_paging_iter():
-            signature = (invoice.metadata or {}).get(SIGNATURE_KEY)
+            # Stripe returns metadata as a StripeObject, not a dict: it has no .get() and
+            # dict() on it raises. to_dict() is the only safe read, and it copes with empty
+            # metadata. Getting this wrong crashes the second run, which is the run that
+            # proves we do not double-bill.
+            metadata = invoice.metadata.to_dict() if invoice.metadata else {}
+            signature = metadata.get(SIGNATURE_KEY)
             if signature:
                 self._invoices.setdefault(signature, {
                     "invoice_id": invoice.id,
-                    "event_id": (invoice.metadata or {}).get(EVENT_ID_KEY),
+                    "event_id": metadata.get(EVENT_ID_KEY),
                 })
         self._loaded = True
 
