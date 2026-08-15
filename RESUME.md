@@ -1,6 +1,17 @@
 # RESUME - where we are and what to do next
 
-**Last session:** Slice A shipped: the repo pivoted to **Slack in, Stripe out**, and a Slack source adapter runs mock-first alongside the email corpus. Slices 0, 1, 2 and 4 shipped before that. A live published review app (invoice-review-queue.lovable.app) with the pipeline feeding it end to end through a secure ingest endpoint. The repo now has a README and a live CI workflow (`.github/workflows/eval.yml`) that runs the whole suite from the committed LLM cache on every push and pull request. Backlog is current.
+**Last session: end of day, 15 Aug 2026.** Slices 0, 1, 2, 4, A, B1 and B2 (Moves A and C) are shipped and pushed. 59 tests green, all 7 must-pass gates pass, `python -m finos.score` exits 0 on a clean checkout with no key. CI runs the whole suite from the committed LLM cache on every push.
+
+**The approve-to-finalise loop is proven end to end.** The worker read an approved row from the live `GET /api/public/approved` endpoint, finalised exactly that Stripe invoice (`in_1U4h7SQ...`, Nordwind Logistics, EUR 24,000) from `draft` to `open`, and marked the row sent via `POST /api/public/mark-sent`. Verified against a before/after Stripe snapshot rather than from log output: exactly 1 of 10 invoices changed status, the other 9 untouched, no new invoices, no duplicated contracts. No customer delivery (`auto_advance=False`, `attempted=False`, `paid_at=None`). A re-run found nothing to do and changed nothing in Stripe, so the loop is safe to repeat.
+
+**Important caveat on that proof.** The approved row was seeded by hand in the Supabase SQL editor, because three review-app bugs still block the automatic path. So the worker-and-Stripe half of the loop is genuinely proven; the pipeline-to-review-queue half is not. Specifically, it is NOT yet shown that the pipeline can put a correct, approvable row into the queue on its own.
+
+## Done so far
+
+- **Slice A** - pivot to Slack in / Stripe out; Slack source adapter mock-first; prompt-injection case and a `no injected instruction obeyed` gate.
+- **Slice B1** - `StripeBilling` behind `BillingClient`, drafts only, idempotent on a client|amount|currency signature stored in Stripe metadata. Hard stop on any key that is not `rk_test_`/`sk_test_`.
+- **Slice B2 Move A** - the approval-gated worker, three independent locks: the queue only returns approved rows, `--send` is required, and Stripe's own status is checked before finalising.
+- **Slice B2 Move C** - `HttpReviewQueue` against the two live bearer-authenticated endpoints. A failed read exits 1 and never looks like an empty queue.
 
 ## Done: Slice 4 - Evals (the TRACE loop)
 
@@ -8,13 +19,21 @@ Built per `docs/slice-4.md`: trajectory grading, an LLM judge on draft quality v
 
 The msg-002 schedule blind spot is closed: the extractor was copying the "50% upfront" example onto a three-milestone contract. Schedule is now graded by instalment count against the golden set and is 9/9, with a must-pass gate.
 
-## Next build: Slice B - Stripe adapter + approval-gated worker (mock-first)
+## Tomorrow's first tasks - all Lovable-side, none in this repo
 
-Not started. Waiting on your go.
+Three review-app bugs block the automatic path. Until they are fixed, an approved row can only be produced by hand in the SQL editor.
 
-Adds `billing/stripe.py` behind the existing `BillingClient` interface with a mock-first path that records "would create and send invoice X" without calling anything, plus the worker that fetches approved-and-unsent rows via `GET /api/public/approved`, calls the billing client to create/finalise/send, and reports back via `POST /api/public/mark-sent`. Both endpoints bearer-authenticated on the Lovable side, service_role hidden. Invariant tests: nothing is sent unless the row is `approved`, an approved row sends exactly once, and the worker holds only a restricted key.
+1. **`/api/public/ingest` does not store `stripe_invoice_id`.** The pipeline sends it on every INVOICE row and the endpoint answers `updated: 16`, but the column is not persisted. Without it an approved row names no invoice and the worker has nothing to finalise.
+2. **The Approve button does not write `status = 'approved'`.** Clicking Approve in the review UI leaves the row in a state the `approved` endpoint does not return, so the worker never sees it.
+3. **`run --push` resets `status` on rows that already exist.** Every INVOICE row is pushed as `pending`, and the ingest upsert overwrites whatever a human had set, so re-running the pipeline silently undoes an approval. The push should leave `status` alone on rows that are already in the table.
 
-Then Slice C (docs/slice-3.md): both mocks swapped for the real thing behind the same interfaces.
+Also: **reconnect the correct Lovable account** before touching any of the above.
+
+Once those three are fixed, re-run the loop with a row the pipeline produced itself, not a hand-seeded one. That is the remaining proof.
+
+## After that
+
+Slice C (`docs/slice-3.md`): swap the mock Slack reader for a real read of a TAGGED message, keeping the mocks as the test default. Then the deepened evals and CI, then the v1.5 follow-up loop, then LangGraph.
 
 ## To resume in Claude Code (VS Code)
 
