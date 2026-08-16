@@ -17,24 +17,29 @@ Opt-in and read-only on the Stripe side: nothing here creates, finalises, voids 
 
 import argparse
 
-from finos.store.ingest import IngestClient
+from finos.store.ingest import STRIPE_OWNED, IngestClient, check_payload
 
 
 def rows_for(statuses_by_event: dict[str, dict]) -> list[dict]:
-    """The smallest row that names a status.
+    """The smallest row that names a status: the key plus the two Stripe-owned columns.
 
-    Only the key and the two fields being updated are sent. Everything else the row holds
-    (the draft, the flags, the approval status a human set) is deliberately absent so the
-    upsert cannot overwrite it with nulls.
+    Everything else the row holds (the draft, the flags, the approval status a human set)
+    is deliberately absent, so the upsert cannot overwrite it. `check_payload` enforces
+    that rather than leaving it to whoever edits this next: this is the exact path that
+    nulled `status` on three approved rows.
     """
-    return [
-        {
+    rows = []
+    for event_id, found in sorted(statuses_by_event.items()):
+        row = {
             "event_id": event_id,
             "stripe_invoice_id": found["invoice_id"],
             "stripe_status": found["status"],
         }
-        for event_id, found in sorted(statuses_by_event.items())
-    ]
+        rows.append(check_payload(
+            {key: value for key, value in row.items() if value is not None},
+            allowed={"event_id"} | STRIPE_OWNED,
+        ))
+    return rows
 
 
 def main() -> None:

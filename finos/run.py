@@ -120,9 +120,11 @@ def run_all(push: bool = False, use_stripe: bool = False) -> list[ContractEvent]
     print(f"trace written to {trace.trace_path}")
 
     if push:
-        # Only real Stripe ids go into a field named stripe_invoice_id. A mock id like
-        # "inv-001" written there would be a lie, and the worker would try to finalise it.
-        rows = rows_for(events, drafts, invoice_ids if use_stripe else {})
+        # Pipeline-owned columns only. The Stripe ids captured above are NOT pushed here:
+        # stripe_invoice_id belongs to the status sync, which writes it and stripe_status
+        # on their own. Mixing them into this payload is what let a re-push clobber
+        # columns it did not own.
+        rows = rows_for(events, drafts)
         try:
             result = IngestClient().push(rows)
             print(f"\npushed {len(rows)} rows to the ingest endpoint")

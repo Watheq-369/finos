@@ -42,7 +42,7 @@ from finos.store import http_queue
 from finos.store.http_queue import HttpReviewQueue, base_url
 from finos.store.stub_queue import StubReviewQueue
 from finos.worker import process
-from finos.store.ingest import IngestClient, rows_for
+from finos.store.ingest import PIPELINE_OWNED, IngestClient, check_payload, rows_for
 
 
 def make_event(**overrides) -> ContractEvent:
@@ -158,7 +158,7 @@ def test_only_invoice_and_flag_cases_reach_the_review_queue():
     rows = rows_for(events, drafts={"gmail:a": "Hi there, invoice attached."})
 
     assert [row["event_id"] for row in rows] == ["gmail:a", "gmail:b"]
-    assert [row["status"] for row in rows] == ["pending", "flagged"]
+    assert [row["route"] for row in rows] == ["INVOICE", "FLAG"]
 
 
 def test_an_invoice_row_carries_the_billing_facts_and_its_draft():
@@ -175,9 +175,10 @@ def test_a_flagged_row_carries_its_reasons_and_no_draft():
 
     row = rows_for([event], drafts={})[0]
 
-    assert row["status"] == "flagged"
+    assert row["route"] == "FLAG"
     assert "no amount to invoice" in row["flags"]
-    assert row["draft_email"] is None
+    # Omitted, not null: an absent key cannot overwrite a draft the row already holds.
+    assert "draft_email" not in row
 
 
 def test_push_sends_a_bearer_token_and_the_rows(monkeypatch):
@@ -696,30 +697,60 @@ def test_a_failed_read_stops_the_worker_before_it_finalises_anything(monkeypatch
     assert billing.invoice_status("inv-001") == "draft"  # nothing was touched
 
 
-# --- the row carries the invoice the worker will finalise ---
+# --- the merge contract: a machine write must never clobber a human decision ---
 
 
-def test_an_invoice_row_carries_its_stripe_invoice_id():
-    rows = rows_for([make_event()], drafts={}, invoice_ids={"gmail:test-001": "in_abc123"})
+def test_the_ingest_payload_never_carries_a_human_owned_field():
+    """The regression. A sync carrying `status` nulled three approved rows and hid them.
 
-    assert rows[0]["stripe_invoice_id"] == "in_abc123"
+    An upsert writes every column it is given, so the only reliable defence is for the
+    payload never to name the column at all.
+    """
+    row = rows_for([make_event()], drafts={"gmail:test-001": "Hi there."})[0]
+
+    assert "status" not in row
+    assert "decided_at" not in row
+    assert "created_at" not in row
+    assert not [key for key, value in row.items() if value is None]
 
 
-def test_a_flagged_row_carries_no_invoice_id():
-    event = validate(make_event(invoice_amount=None))
+def test_no_pipeline_row_carries_a_human_owned_field():
+    """Not just the happy path: every route and every shape of missing data."""
+    events = [
+        make_event(event_id="gmail:a", route=Route.INVOICE),
+        validate(make_event(event_id="gmail:b", invoice_amount=None)),
+        make_event(event_id="gmail:c", client_name=None, currency=None, tax_id=None),
+    ]
 
-    row = rows_for([event], drafts={}, invoice_ids={})[0]
+    for row in rows_for(events, drafts={}):
+        assert not (set(row) & {"status", "decided_at", "created_at"})
+        assert not [key for key, value in row.items() if value is None]
 
-    assert row["status"] == "flagged"
-    assert row["stripe_invoice_id"] is None
 
-
-def test_rows_without_invoice_ids_still_build():
-    """The mock path pushes no ids at all; the field must simply be null, not missing."""
+def test_the_pipeline_never_writes_the_stripe_columns():
+    """Those belong to the status sync, which writes them on their own."""
     row = rows_for([make_event()], drafts={})[0]
 
-    assert "stripe_invoice_id" in row
-    assert row["stripe_invoice_id"] is None
+    assert "stripe_invoice_id" not in row
+    assert "stripe_status" not in row
+
+
+def test_the_payload_check_rejects_a_human_owned_column():
+    """The guard has to be able to fail, or it is decoration."""
+    with pytest.raises(ValueError, match="status"):
+        check_payload({"event_id": "gmail:a", "status": "pending"},
+                      allowed=set(PIPELINE_OWNED) | {"status"})
+
+
+def test_the_payload_check_rejects_a_null_value():
+    with pytest.raises(ValueError, match="null"):
+        check_payload({"event_id": "gmail:a", "client_name": None},
+                      allowed=set(PIPELINE_OWNED))
+
+
+def test_the_payload_check_demands_the_upsert_key():
+    with pytest.raises(ValueError, match="event_id"):
+        check_payload({"client_name": "Test GmbH"}, allowed=set(PIPELINE_OWNED))
 
 
 def test_a_finalised_invoice_still_counts_as_already_invoiced(monkeypatch):
