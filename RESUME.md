@@ -1,10 +1,14 @@
 # RESUME - where we are and what to do next
 
-**Last session: end of day, 15 Aug 2026.** Slices 0, 1, 2, 4, A, B1 and B2 (Moves A and C) are shipped and pushed. 59 tests green, all 7 must-pass gates pass, `python -m finos.score` exits 0 on a clean checkout with no key. CI runs the whole suite from the committed LLM cache on every push.
+**Last session: 16 Aug 2026.** Slices 0, 1, 2, 4, A, B1 and B2 (Moves A and C) are shipped and pushed. 61 tests green, all 7 must-pass gates pass, `python -m finos.score` exits 0 on a clean checkout with no key. CI runs the whole suite from the committed LLM cache on every push.
 
-**The approve-to-finalise loop is proven end to end.** The worker read an approved row from the live `GET /api/public/approved` endpoint, finalised exactly that Stripe invoice (`in_1U4h7SQ...`, Nordwind Logistics, EUR 24,000) from `draft` to `open`, and marked the row sent via `POST /api/public/mark-sent`. Verified against a before/after Stripe snapshot rather than from log output: exactly 1 of 10 invoices changed status, the other 9 untouched, no new invoices, no duplicated contracts. No customer delivery (`auto_advance=False`, `attempted=False`, `paid_at=None`). A re-run found nothing to do and changed nothing in Stripe, so the loop is safe to repeat.
+**The whole loop is proven, with no hand-seeding.** The pipeline wrote the row, the review UI approved it, and the worker finalised it. `run --mock --stripe --push` reported `inserted: 0, updated: 16` and created no new Stripe invoices; `GET /api/public/approved` then returned exactly one row, `gmail:msg-002` Barcelona Retail Group S.L. EUR 15,000, carrying the `stripe_invoice_id` the pipeline itself had stored. The worker finalised that invoice `draft` -> `open` and marked the row sent.
 
-**Important caveat on that proof.** The approved row was seeded by hand in the Supabase SQL editor, because three review-app bugs still block the automatic path. So the worker-and-Stripe half of the loop is genuinely proven; the pipeline-to-review-queue half is not. Specifically, it is NOT yet shown that the pipeline can put a correct, approvable row into the queue on its own.
+Verified against before/after Stripe snapshots rather than from log output: 10 invoices before and after, none created or deleted, exactly one row changed, the other nine identical field for field, no duplicate signatures. No customer delivery (`auto_advance=False`, `attempted=False`, `amount_paid=0`, `paid_at=None`). Re-running the worker afterwards returned "no approved rows waiting", so `mark_sent` took effect and the same invoice cannot be finalised twice.
+
+This supersedes the 15 Aug caveat: that proof used a row seeded by hand in the Supabase SQL editor. This one did not. All three review-app bugs are fixed Lovable-side.
+
+**Eval suite deepened (16 Aug).** The corpus is now 29 cases (27 email + 2 Slack), up from 22. Seven harder extraction fixtures were added: an approximate amount, a second currency conflict, a multi-line German VAT block, a four-milestone percentage drawdown, a near-duplicate from a client already invoiced, and a near-miss recipient name. A new per-market VAT section grades treatment, rate and tax id for DE, ES and AE. The judge now faces a second frozen bad draft that is fluent and placeholder-free but bills the wrong number, so it is tested on factual errors, not just template artefacts. The pipeline got every new case right on the first run.
 
 ## Done so far
 
@@ -19,21 +23,23 @@ Built per `docs/slice-4.md`: trajectory grading, an LLM judge on draft quality v
 
 The msg-002 schedule blind spot is closed: the extractor was copying the "50% upfront" example onto a three-milestone contract. Schedule is now graded by instalment count against the golden set and is 9/9, with a must-pass gate.
 
-## Tomorrow's first tasks - all Lovable-side, none in this repo
+## Closed on 16 Aug - the three review-app bugs
 
-Three review-app bugs block the automatic path. Until they are fixed, an approved row can only be produced by hand in the SQL editor.
+All three are fixed Lovable-side and verified from this repo:
 
-1. **`/api/public/ingest` does not store `stripe_invoice_id`.** The pipeline sends it on every INVOICE row and the endpoint answers `updated: 16`, but the column is not persisted. Without it an approved row names no invoice and the worker has nothing to finalise.
-2. **The Approve button does not write `status = 'approved'`.** Clicking Approve in the review UI leaves the row in a state the `approved` endpoint does not return, so the worker never sees it.
-3. **`run --push` resets `status` on rows that already exist.** Every INVOICE row is pushed as `pending`, and the ingest upsert overwrites whatever a human had set, so re-running the pipeline silently undoes an approval. The push should leave `status` alone on rows that are already in the table.
+1. **`/api/public/ingest` now stores `stripe_invoice_id`.** Verified by reading the row back through `/api/public/approved` and finding the id the pipeline had just written.
+2. **The Approve button now writes `status = 'approved'`.** Verified when an approved row appeared in `GET /api/public/approved`.
+3. **`run --push` no longer resets `status` on existing rows.** Verified by approving a row, running a full 16-row push over it, and finding it still approved afterwards.
 
-Also: **reconnect the correct Lovable account** before touching any of the above.
+The correct Lovable account is reconnected.
 
-Once those three are fixed, re-run the loop with a row the pipeline produced itself, not a hand-seeded one. That is the remaining proof.
+## Housekeeping before any demo
 
-## After that
+Four Stripe test invoices are now `open` (Nordwind, Falcon, Velasco, Barcelona). An open invoice can be voided but never returned to draft. For a clean demo run, void them and let the pipeline create fresh drafts.
 
-Slice C (`docs/slice-3.md`): swap the mock Slack reader for a real read of a TAGGED message, keeping the mocks as the test default. Then the deepened evals and CI, then the v1.5 follow-up loop, then LangGraph.
+## Next
+
+Slice C (`docs/slice-3.md`): swap the mock Slack reader for a real read of a TAGGED message, keeping the mocks as the test default. **Do not start it without an explicit go.** After that: the v1.5 follow-up loop, then LangGraph. The deepened evals that used to sit here are done as of 16 Aug.
 
 ## To resume in Claude Code (VS Code)
 

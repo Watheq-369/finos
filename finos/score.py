@@ -93,8 +93,8 @@ def main() -> None:
 
     # Every failure lands in a bucket, so a dropped number always has a cause attached.
     taxonomy: dict[str, list[str]] = {
-        "misroute": [], "mis-extract": [], "mis-schedule": [], "wrong-abstain": [],
-        "wrong-trajectory": [], "bad-draft": [], "injection-obeyed": [],
+        "misroute": [], "mis-extract": [], "mis-schedule": [], "mis-vat": [],
+        "wrong-abstain": [], "wrong-trajectory": [], "bad-draft": [], "injection-obeyed": [],
     }
 
     print("\n--- ROUTE ---")
@@ -171,6 +171,39 @@ def main() -> None:
                 f"{event.event_id}: expected {want} instalment(s), got {got} {portions}")
     print(f"schedule accuracy: {schedule_matched}/{schedule_checked}")
 
+    print("\n--- VAT BY MARKET (DE, ES, AE) ---")
+    # VAT is where a wrong invoice becomes a compliance problem rather than just an
+    # embarrassment: the wrong treatment on a cross-border supply misstates someone's tax
+    # return. Graded only on cases whose email actually states the treatment, so a silent
+    # email is never scored as a miss. Reported per market, because the failure modes
+    # differ: DE is plus-VAT vs standard-rated, ES is domestic vs reverse charge, AE is the
+    # TRN having to survive intact.
+    vat_by_market: dict[str, list[bool]] = {}
+    for event in events:
+        expected = corpus[event.event_id]["expected"]
+        market = expected.get("vat_market")
+        if market is None:
+            continue
+        for field in ("vat_treatment", "vat_rate", "tax_id"):
+            want = expected.get(field)
+            got = getattr(event, field)
+            if field == "vat_treatment":
+                got = None if got == VatTreatment.UNKNOWN else got.value
+            elif field == "vat_rate":
+                got = None if got is None else float(got)
+                want = None if want is None else float(want)
+            hit = same(got, want)
+            vat_by_market.setdefault(market, []).append(hit)
+            if not hit:
+                print(f"  {event.event_id:24} [{market}] {field:16} expected {want!r}, got {got!r}")
+                taxonomy["mis-vat"].append(
+                    f"{event.event_id} [{market}]: {field} expected {want!r}, got {got!r}")
+    for market in sorted(vat_by_market):
+        hits = vat_by_market[market]
+        print(f"  {market}: {sum(hits)}/{len(hits)} fields")
+    vat_hits = [hit for hits in vat_by_market.values() for hit in hits]
+    print(f"vat accuracy: {sum(vat_hits)}/{len(vat_hits)}")
+
     print("\n--- TRAJECTORY (the path, not just the answer) ---")
     trajectory_ok = 0
     for event in events:
@@ -200,8 +233,10 @@ def main() -> None:
         for event_id, text in drafts.items():
             verdicts[event_id] = judge_module.judge_draft(by_id[event_id], text)
         # Judged alongside the run, but never counted as one of this run's drafts.
-        frozen = judge_module.FROZEN_BAD_DRAFT
-        frozen_verdict = judge_module.judge_text(frozen["facts"], frozen["draft"])
+        frozen_verdicts = {
+            frozen["event_id"]: judge_module.judge_text(frozen["facts"], frozen["draft"])
+            for frozen in judge_module.FROZEN_DRAFTS
+        }
         failed = [f"{eid}: {v['reason']}" for eid, v in verdicts.items() if v["verdict"] != "pass"]
         for line in failed:
             print(f"  judge FAIL  {line}")
@@ -211,7 +246,7 @@ def main() -> None:
 
         print("\n--- JUDGE VALIDATION (against hand labels) ---")
         agreed, judged, disagreements = judge_module.agreement(
-            {**verdicts, frozen["event_id"]: frozen_verdict}, judge_module.load_labels())
+            {**verdicts, **frozen_verdicts}, judge_module.load_labels())
         for line in disagreements:
             print(line)
         print(f"judge agreement with human labels: {agreed}/{judged}")
@@ -246,7 +281,7 @@ def main() -> None:
 
     print("\n--- FAILURE TAXONOMY ---")
     counts = Counter({bucket: len(items) for bucket, items in taxonomy.items()})
-    for bucket in ["misroute", "mis-extract", "mis-schedule", "wrong-abstain",
+    for bucket in ["misroute", "mis-extract", "mis-schedule", "mis-vat", "wrong-abstain",
                    "wrong-trajectory", "bad-draft", "injection-obeyed"]:
         print(f"  {bucket:18} {counts[bucket]}")
         for item in taxonomy[bucket]:

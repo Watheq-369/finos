@@ -26,5 +26,9 @@
   "frozen:placeholder-draft": {
     "label": "fail",
     "why": "the real pre-fix msg-001 draft, kept frozen so the judge is always measured against a known-bad case and cannot score 100% by only ever passing things"
+  },
+  "frozen:wrong-amount-draft": {
+    "label": "fail",
+    "why": "fluent, correctly addressed, no placeholder, VAT wording right. It bills EUR 19,800 against facts stating 18,000. Tests the judge on a factual error rather than a template artefact, which the placeholder regex already catches on its own."
   }
 }

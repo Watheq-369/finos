@@ -53,7 +53,7 @@
     "subject": "Contract signed - implementation support",
     "body": "Hi Younes,\n\nSigned and attached. The fee is EUR 10,000 plus VAT, payable net 14. Our VAT ID is on the contract if you need it for the invoice.\n\nBeste Gruesse,\nThomas Berg, Rheinbach Software GmbH",
     "expected_route": "INVOICE",
-    "expected": {"client_name": "Rheinbach Software GmbH", "currency": "EUR", "total_amount": 10000, "invoice_amount": 10000, "vat_treatment": "plus_vat", "tax_id": null, "flag_reason": null, "schedule_count": 1}
+    "expected": {"client_name": "Rheinbach Software GmbH", "currency": "EUR", "total_amount": 10000, "invoice_amount": 10000, "vat_treatment": "plus_vat", "tax_id": null, "flag_reason": null, "schedule_count": 1, "vat_market": "DE", "vat_rate": null}
   },
   {
     "message_id": "msg-008",
@@ -61,7 +61,7 @@
     "subject": "Signed contract - please issue compliant e-invoice",
     "body": "Hi Younes,\n\nContract signed, attached. Fee is AED 80,000, net 30. Please issue a tax-compliant e-invoice including 5% VAT. Our TRN is 100234567800003, it must appear on the invoice.\n\nRegards,\nNadia Suleiman, Finance Manager, Sands Hospitality LLC",
     "expected_route": "INVOICE",
-    "expected": {"client_name": "Sands Hospitality LLC", "currency": "AED", "total_amount": 80000, "invoice_amount": 80000, "vat_treatment": "standard", "tax_id": "100234567800003", "flag_reason": null, "schedule_count": 1}
+    "expected": {"client_name": "Sands Hospitality LLC", "currency": "AED", "total_amount": 80000, "invoice_amount": 80000, "vat_treatment": "standard", "tax_id": "100234567800003", "flag_reason": null, "schedule_count": 1, "vat_market": "AE", "vat_rate": 5}
   },
   {
     "message_id": "msg-009",
@@ -69,7 +69,7 @@
     "subject": "Firmado - intra-EU B2B",
     "body": "Hola Younes,\n\nSigned contract attached. Fee is EUR 18,000, net 30. This is an intra-EU B2B supply, so please apply the reverse charge, our VAT number is ESB12345678. No Spanish VAT to be charged.\n\nUn saludo,\nPau Serra, Iberia Mobility S.A.",
     "expected_route": "INVOICE",
-    "expected": {"client_name": "Iberia Mobility S.A.", "currency": "EUR", "total_amount": 18000, "invoice_amount": 18000, "vat_treatment": "reverse_charge", "tax_id": "ESB12345678", "flag_reason": null, "schedule_count": 1}
+    "expected": {"client_name": "Iberia Mobility S.A.", "currency": "EUR", "total_amount": 18000, "invoice_amount": 18000, "vat_treatment": "reverse_charge", "tax_id": "ESB12345678", "flag_reason": null, "schedule_count": 1, "vat_market": "ES", "vat_rate": null}
   },
   {
     "message_id": "msg-010",
@@ -158,5 +158,61 @@
     "body": "Hi Younes,\n\nResending in case the first one got buried, attached is the countersigned SOW, EUR 24,000, net 30 on signature. Let me know once the invoice is on its way.\n\nPetra Lang, Head of Procurement, Nordwind Logistics GmbH",
     "expected_route": "REJECT",
     "expected": {"client_name": "Nordwind Logistics GmbH", "currency": "EUR", "total_amount": 24000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "duplicate of msg-001, do not create a second invoice"}
+  },
+  {
+    "message_id": "msg-021",
+    "from": "Henrik Sorensen <henrik@nordlys-marine.no>",
+    "subject": "Signed - port operations review",
+    "body": "Hi Younes,\n\nSigned agreement attached. The fee will be approximately EUR 26,000, give or take, and we will confirm the exact figure once the vessel schedule is locked next week. Net 30 from invoice date.\n\nBest,\nHenrik Sorensen, Nordlys Marine AS",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Nordlys Marine AS", "currency": "EUR", "total_amount": null, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "amount is an approximation, not a fixed figure"}
+  },
+  {
+    "message_id": "msg-022",
+    "from": "Aiko Tanaka <aiko@meridian-pacific.jp>",
+    "subject": "Countersigned - data migration workstream",
+    "body": "Hi Younes,\n\nCountersigned contract attached. The fee is USD 15,000. Our finance team settles every vendor invoice in EUR, so please convert and issue the invoice in EUR at the ECB reference rate on the invoice date. Net 30.\n\nBest regards,\nAiko Tanaka, Meridian Pacific KK",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Meridian Pacific KK", "currency": null, "total_amount": 15000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "currency conflict: fee quoted in USD, invoice requested in EUR"}
+  },
+  {
+    "message_id": "msg-023",
+    "from": "Dr. Anke Weber <a.weber@fraunhof-elektronik.de>",
+    "subject": "Unterzeichneter Vertrag - Rechnungsprozess",
+    "body": "Hallo Younes,\n\nanbei der unterzeichnete Vertrag.\n\nHonorar: EUR 28.000\nZuzueglich Umsatzsteuer: 19%\nUnsere USt-IdNr.: DE812345678\nZahlungsziel: 30 Tage netto\n\nBitte stelle die Rechnung entsprechend aus.\n\nViele Gruesse,\nDr. Anke Weber, Fraunhof Elektronik GmbH",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Fraunhof Elektronik GmbH", "currency": "EUR", "total_amount": 28000, "invoice_amount": 28000, "vat_treatment": "standard", "tax_id": "DE812345678", "flag_reason": null, "schedule_count": 1, "vat_market": "DE", "vat_rate": 19}
+  },
+  {
+    "message_id": "msg-024",
+    "from": "Priya Raman <priya@lumen-utilities.ie>",
+    "subject": "Executed - metering platform rollout",
+    "body": "Hi Younes,\n\nExecuted contract attached. Total fee EUR 60,000, drawn down as follows:\n\n- 20% on signature\n- 30% at design sign-off\n- 40% at go-live\n- the remaining 10% once the 60-day hypercare period closes\n\nPlease invoice the signature portion now. Net 30 throughout.\n\nRegards,\nPriya Raman, Lumen Utilities Ltd",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Lumen Utilities Ltd", "currency": "EUR", "total_amount": 60000, "invoice_amount": 12000, "vat_treatment": null, "tax_id": null, "flag_reason": null, "schedule_count": 4}
+  },
+  {
+    "message_id": "msg-025",
+    "from": "Petra Lang <p.lang@nordwind-logistics.de>",
+    "subject": "Second SOW - Q4 demand forecasting",
+    "body": "Hi Younes,\n\nSeparate engagement to the Q3 one, this is the Q4 demand forecasting piece we discussed on the call. Countersigned SOW attached, EUR 18,000, invoiced in full on signature, net 30.\n\nTo be clear, this is a new SOW, not a resend of the Q3 paperwork.\n\nBest,\nPetra Lang, Head of Procurement, Nordwind Logistics GmbH",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Nordwind Logistics GmbH", "currency": "EUR", "total_amount": 18000, "invoice_amount": 18000, "vat_treatment": null, "tax_id": null, "flag_reason": null, "schedule_count": 1}
+  },
+  {
+    "message_id": "msg-026",
+    "from": "Klaus Brenner <k.brenner@hansa-maritime.de>",
+    "subject": "Signed SOW - port systems audit",
+    "body": "Hi Yannis,\n\nSigned SOW attached. The fee is EUR 21,000, net 30 on signature. Please raise the invoice at your convenience and send it to me directly.\n\nBest,\nKlaus Brenner, Hansa Maritime GmbH",
+    "expected_route": "FLAG",
+    "expected": {"client_name": "Hansa Maritime GmbH", "currency": "EUR", "total_amount": 21000, "invoice_amount": null, "vat_treatment": null, "tax_id": null, "flag_reason": "addressed to 'Yannis', a near-miss of the owner's name, possible misroute"}
+  },
+  {
+    "message_id": "msg-027",
+    "from": "Cristina Molina <cristina@solaris-iberica.es>",
+    "subject": "Contrato firmado - plataforma de facturacion",
+    "body": "Hola Younes,\n\nContrato firmado adjunto.\n\nHonorarios: EUR 24.000\nIVA: 21% (operacion nacional, no aplica la inversion del sujeto pasivo)\nCIF: B87654321\nCondiciones de pago: 30 dias\n\nUn saludo,\nCristina Molina, Solaris Iberica S.L.",
+    "expected_route": "INVOICE",
+    "expected": {"client_name": "Solaris Iberica S.L.", "currency": "EUR", "total_amount": 24000, "invoice_amount": 24000, "vat_treatment": "standard", "tax_id": "B87654321", "flag_reason": null, "schedule_count": 1, "vat_market": "ES", "vat_rate": 21}
   }
 ]

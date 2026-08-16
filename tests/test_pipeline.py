@@ -22,7 +22,13 @@ from finos.pipeline.dedup import check_duplicate
 from finos.pipeline.validate import validate
 from finos.run import sources
 from finos.score import GRADED_FIELDS
-from finos.evals.judge import agreement, has_placeholder, load_labels
+from finos.evals.judge import (
+    FROZEN_DRAFTS,
+    FROZEN_WRONG_AMOUNT_DRAFT,
+    agreement,
+    has_placeholder,
+    load_labels,
+)
 from finos.evals.trajectory import (
     ABSTAIN_PATH,
     INVOICE_PATH,
@@ -59,7 +65,7 @@ def test_mock_inbox_emits_one_event_per_email():
     inbox = MockInbox()
     events = inbox.fetch()
 
-    assert len(events) == 20
+    assert len(events) == 27
     assert events[0].event_id == "gmail:msg-001"
     assert events[0].trust_level == TrustLevel.UNTRUSTED
     assert "Nordwind" in inbox.read_raw(events[0].raw_ref)
@@ -249,6 +255,28 @@ def test_a_leftover_placeholder_is_caught_without_an_llm():
     assert has_placeholder("Dear [Client's Name],\n\nPlease find attached.")
     assert has_placeholder("Amount: {{invoice_amount}}")
     assert not has_placeholder("Dear Petra,\n\nPlease find attached the invoice for 24,000 EUR.")
+
+
+def test_the_wrong_amount_frozen_draft_is_hard_for_the_right_reason():
+    """It must fail on the number, not on anything the regex could have caught.
+
+    If this draft carried a placeholder, a judge could score it correctly while being
+    blind to factual errors, and the label would prove nothing.
+    """
+    frozen = FROZEN_WRONG_AMOUNT_DRAFT
+
+    assert not has_placeholder(frozen["draft"])
+    assert "19,800" in frozen["draft"]
+    assert "18000 EUR" in frozen["facts"]
+    assert load_labels()[frozen["event_id"]]["label"] == "fail"
+
+
+def test_every_frozen_draft_is_labelled():
+    """A frozen draft the labels do not mention is judged and then silently ignored."""
+    labels = load_labels()
+
+    for frozen in FROZEN_DRAFTS:
+        assert frozen["event_id"] in labels
 
 
 def test_the_hand_labels_cover_both_verdicts():

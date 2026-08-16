@@ -98,6 +98,36 @@ FROZEN_BAD_DRAFT = {
 }
 
 
+# The placeholder case is the easy half of the job: a regex already catches it, so a judge
+# that only ever sees that one is never tested on the hard half. This draft is fluent,
+# correctly addressed, has no placeholder, and gets the VAT wording right. The only thing
+# wrong with it is the number: it bills EUR 19,800 against facts that say 18,000. A judge
+# that passes this would wave through a wrong invoice, which is the failure this system
+# exists to prevent.
+FROZEN_WRONG_AMOUNT_DRAFT = {
+    "event_id": "frozen:wrong-amount-draft",
+    "facts": (
+        "Client: Iberia Mobility S.A.\n"
+        "Amount to invoice now: 18000 EUR\n"
+        "Whole engagement total: 18000\n"
+        "Agreed payment schedule: [{'portion': 'EUR 18,000', 'trigger': 'net 30'}]\n"
+        "VAT treatment: reverse_charge\n"
+        "Payment terms: net 30"
+    ),
+    "draft": (
+        "Dear Pau,\n\n"
+        "Thank you for confirming the intra-EU B2B engagement. Please find attached our "
+        "invoice for EUR 19,800, payable within 30 days of the invoice date. As agreed, the "
+        "reverse charge applies and no Spanish VAT has been added.\n\n"
+        "Do let me know if your accounts payable team needs anything further.\n\n"
+        "Best regards,\nYounes"
+    ),
+}
+
+# Judged alongside every run, never counted as one of that run's drafts.
+FROZEN_DRAFTS = [FROZEN_BAD_DRAFT, FROZEN_WRONG_AMOUNT_DRAFT]
+
+
 def load_labels() -> dict:
     return json.loads(LABELS_PATH.read_text())
 
