@@ -37,10 +37,10 @@ These are the practices that make the system maintainable, checkable, and safe t
 
 ## Current phase (this is the only part that moves)
 
-- **Current slice: A (pivot + Slack source, mock-first)**
-- **Spec: docs/slice-3.md** (Slice C, the real Slack + real Stripe target this is building toward)
+- **Current slice: v1.5 Slice 1 (the dunning follow-up loop as a LangGraph graph, mock-first)**
+- **Spec: docs/slice-v1.5-1.md**
 - Work only within the current slice. Anything the spec marks "later" or "not yet" (real Slack, real Stripe, the approval worker, LangGraph, payment follow-up, deepened evals, memory, UI polish) is out of bounds until the pointer above moves.
-- **Slice order from here:** A (pivot + Slack source, mock-first), B (Stripe adapter + approval-gated worker, mock-first), C (go real behind the interfaces: tagged Slack read, Stripe test mode). Then the deepened evals and CI, then v1.5 follow-up, then LangGraph. One slice at a time, stop and report after each.
+- **Slice order from here:** A, B1, B2 and the deepened evals are done. **v1.5 Slice 1 (dunning loop, LangGraph) is current.** Slice C (real tagged Slack read, `docs/slice-3.md`) is still parked and was deliberately skipped, not replaced. After v1.5 Slice 1: wiring the dunning loop to real open invoices and the review queue. One slice at a time, stop and report after each.
 - **To advance:** only on Younes's explicit say-so, update "Current slice" and "Spec" to the next slice and follow that spec. Do not advance on your own.
 
 ## This folder (existing setup, do not break it)

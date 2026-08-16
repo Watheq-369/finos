@@ -15,6 +15,7 @@ import argparse
 import json
 from collections import Counter
 
+from finos.evals import dunning_eval
 from finos.evals import judge as judge_module
 from finos.evals.trajectory import classify_routes_from_trace, expected_path, paths_from_trace
 from finos.models import ContractEvent, Route, VatTreatment
@@ -95,6 +96,7 @@ def main() -> None:
     taxonomy: dict[str, list[str]] = {
         "misroute": [], "mis-extract": [], "mis-schedule": [], "mis-vat": [],
         "wrong-abstain": [], "wrong-trajectory": [], "bad-draft": [], "injection-obeyed": [],
+        "wrong-dunning": [],
     }
 
     print("\n--- ROUTE ---")
@@ -219,6 +221,7 @@ def main() -> None:
 
     print("\n--- DRAFT QUALITY ---")
     placeholder_drafts = []
+    incomplete_drafts = []  # follow-up drafts that left out a required fact
     for event_id, text in drafts.items():
         if judge_module.has_placeholder(text):
             placeholder_drafts.append(event_id)
@@ -279,10 +282,38 @@ def main() -> None:
         print(line)
     print(f"injected values obeyed: {len(obeyed)}")
 
+    print("\n--- DUNNING (the follow-up loop, one decision per scenario) ---")
+    # A different subsystem from the invoice pipeline, graded the same way: a golden set
+    # with the correct answer written down, not a vibe check. `days_overdue` is graded
+    # alongside the decision because a right answer reached from the wrong number of days
+    # is luck, and would drift the moment the cadence changed.
+    dunning_matched, dunning_checked, dunning_misses, dunning_states = dunning_eval.grade()
+    for miss in dunning_misses:
+        print(f"  {miss}")
+        taxonomy["wrong-dunning"].append(miss)
+    print(f"dunning accuracy: {dunning_matched}/{dunning_checked} fields")
+
+    dunning_drafts = {
+        scenario_id: state.draft_email
+        for scenario_id, state in dunning_states.items() if state.draft_email
+    }
+    for scenario_id, text in dunning_drafts.items():
+        if judge_module.has_placeholder(text):
+            placeholder_drafts.append(scenario_id)
+            print(f"  {scenario_id:24} PLACEHOLDER left in the follow-up draft")
+            taxonomy["bad-draft"].append(f"{scenario_id}: placeholder left in the follow-up draft")
+        missing = dunning_eval.missing_facts(dunning_states[scenario_id])
+        if missing:
+            incomplete_drafts.append(scenario_id)
+            print(f"  {scenario_id:24} draft does not state: {', '.join(missing)}")
+            taxonomy["bad-draft"].append(f"{scenario_id}: draft omits {', '.join(missing)}")
+    print(f"follow-up drafts written: {len(dunning_drafts)}, "
+          f"complete: {len(dunning_drafts) - len(incomplete_drafts)}")
+
     print("\n--- FAILURE TAXONOMY ---")
     counts = Counter({bucket: len(items) for bucket, items in taxonomy.items()})
     for bucket in ["misroute", "mis-extract", "mis-schedule", "mis-vat", "wrong-abstain",
-                   "wrong-trajectory", "bad-draft", "injection-obeyed"]:
+                   "wrong-trajectory", "bad-draft", "injection-obeyed", "wrong-dunning"]:
         print(f"  {bucket:18} {counts[bucket]}")
         for item in taxonomy[bucket]:
             print(f"      {item}")
@@ -294,8 +325,10 @@ def main() -> None:
         ("abstain correctness 100%", len(abstain_wrong) == 0),
         ("schedule instalments correct on all invoice cases", schedule_matched == schedule_checked),
         ("all trajectories correct", trajectory_ok == total),
-        ("no draft with a placeholder", len(placeholder_drafts) == 0),
+        ("no draft with a placeholder or a missing fact",
+         len(placeholder_drafts) == 0 and len(incomplete_drafts) == 0),
         ("no injected instruction obeyed", len(obeyed) == 0),
+        ("dunning tier correct on all scenarios", dunning_matched == dunning_checked),
     ]
     for name, passed in gates:
         print(f"  {'PASS' if passed else 'FAIL'}  {name}")

@@ -1,6 +1,6 @@
 # RESUME - where we are and what to do next
 
-**Last session: 16 Aug 2026.** Slices 0, 1, 2, 4, A, B1 and B2 (Moves A and C) are shipped and pushed. 61 tests green, all 7 must-pass gates pass, `python -m finos.score` exits 0 on a clean checkout with no key. CI runs the whole suite from the committed LLM cache on every push.
+**Last session: 16 Aug 2026.** Slices 0, 1, 2, 4, A, B1, B2 (Moves A and C), the deepened evals, and v1.5 Slice 1 are shipped and pushed. 81 tests green, all 8 must-pass gates pass, `python -m finos.score` exits 0 on a clean checkout with no key. CI runs the whole suite from the committed LLM cache on every push.
 
 **The whole loop is proven, with no hand-seeding.** The pipeline wrote the row, the review UI approved it, and the worker finalised it. `run --mock --stripe --push` reported `inserted: 0, updated: 16` and created no new Stripe invoices; `GET /api/public/approved` then returned exactly one row, `gmail:msg-002` Barcelona Retail Group S.L. EUR 15,000, carrying the `stripe_invoice_id` the pipeline itself had stored. The worker finalised that invoice `draft` -> `open` and marked the row sent.
 
@@ -37,9 +37,22 @@ The correct Lovable account is reconnected.
 
 Four Stripe test invoices are now `open` (Nordwind, Falcon, Velasco, Barcelona). An open invoice can be voided but never returned to draft. For a clean demo run, void them and let the pipeline create fresh drafts.
 
+## Done: v1.5 Slice 1 - the dunning loop (16 Aug)
+
+The first agentic piece. A LangGraph graph decides the next dunning action for one open unpaid invoice, as of a date passed in, and drafts the follow-up. It never sends. Spec and the graph diagram are in `docs/slice-v1.5-1.md`.
+
+Six nodes, two branches. `check_paid` runs first, so a paid invoice exits before any tier or draft exists. No cycle edge: the day-to-day loop runs through a human approval and re-invocation. Cadence is a `DUNNING_SCHEDULE` constant (1 day gentle, 2 days firmer, 4 days formal). Six graded scenarios, 18/18, plus a new must-pass gate.
+
+Not wired to anything real yet: `MockPayments` reads a fixture, and no code reads open invoices from Stripe or writes a dunning decision to the review queue.
+
 ## Next
 
-Slice C (`docs/slice-3.md`): swap the mock Slack reader for a real read of a TAGGED message, keeping the mocks as the test default. **Do not start it without an explicit go.** After that: the v1.5 follow-up loop, then LangGraph. The deepened evals that used to sit here are done as of 16 Aug.
+Two candidates, your call:
+
+1. **Wire the dunning loop to something real** - read open invoices from Stripe via the `PaymentStatus` seam, and record approved reminders so `reminders_sent` advances by itself. Without this the loop cannot actually progress a tier in production.
+2. **Slice C** (`docs/slice-3.md`) - swap the mock Slack reader for a real read of a TAGGED message. Still parked; it was skipped, not replaced.
+
+**Do not start either without an explicit go.**
 
 ## To resume in Claude Code (VS Code)
 

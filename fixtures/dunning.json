@@ -1,0 +1,50 @@
+[
+  {
+    "scenario_id": "dun-001-not-overdue",
+    "note": "due today. Nothing is late yet, so the loop must stay quiet.",
+    "invoice": {"invoice_id": "in_mock_001", "client_name": "Nordwind Logistics GmbH", "amount": 24000, "currency": "EUR", "due_date": "2026-08-16"},
+    "reminders_sent": [],
+    "as_of": "2026-08-16",
+    "expected": {"action": "none", "tier": null, "days_overdue": 0}
+  },
+  {
+    "scenario_id": "dun-002-one-day",
+    "note": "one day late, nothing sent yet. The first gentle nudge is due.",
+    "invoice": {"invoice_id": "in_mock_002", "client_name": "Barcelona Retail Group S.L.", "amount": 15000, "currency": "EUR", "due_date": "2026-08-15"},
+    "reminders_sent": [],
+    "as_of": "2026-08-16",
+    "expected": {"action": "send_reminder", "tier": "reminder_1", "days_overdue": 1}
+  },
+  {
+    "scenario_id": "dun-003-two-days",
+    "note": "two days late and the gentle one already went. Advance exactly one tier.",
+    "invoice": {"invoice_id": "in_mock_003", "client_name": "Falcon Advisory FZ-LLC", "amount": 6000, "currency": "USD", "due_date": "2026-08-14"},
+    "reminders_sent": ["reminder_1"],
+    "as_of": "2026-08-16",
+    "expected": {"action": "send_reminder", "tier": "reminder_2", "days_overdue": 2}
+  },
+  {
+    "scenario_id": "dun-004-four-days",
+    "note": "four days late, both reminders sent. Escalation is due.",
+    "invoice": {"invoice_id": "in_mock_004", "client_name": "Sands Hospitality LLC", "amount": 80000, "currency": "AED", "due_date": "2026-08-12"},
+    "reminders_sent": ["reminder_1", "reminder_2"],
+    "as_of": "2026-08-16",
+    "expected": {"action": "send_reminder", "tier": "escalation", "days_overdue": 4}
+  },
+  {
+    "scenario_id": "dun-005-already-paid",
+    "note": "nine days late on paper, but paid. The freshness guard: never chase this. It is deliberately the MOST overdue case in the set, so a graph that checked payment last would fail it loudly.",
+    "invoice": {"invoice_id": "in_mock_005_paid", "client_name": "Verde Energy S.L.", "amount": 20000, "currency": "EUR", "due_date": "2026-08-07"},
+    "reminders_sent": ["reminder_1", "reminder_2"],
+    "as_of": "2026-08-16",
+    "expected": {"action": "resolved", "tier": null, "days_overdue": null}
+  },
+  {
+    "scenario_id": "dun-006-already-escalated",
+    "note": "eleven days late with every tier already sent. The schedule is exhausted, so the loop stops rather than repeating itself.",
+    "invoice": {"invoice_id": "in_mock_006", "client_name": "Iberia Mobility S.A.", "amount": 18000, "currency": "EUR", "due_date": "2026-08-05"},
+    "reminders_sent": ["reminder_1", "reminder_2", "escalation"],
+    "as_of": "2026-08-16",
+    "expected": {"action": "none", "tier": null, "days_overdue": 11}
+  }
+]
