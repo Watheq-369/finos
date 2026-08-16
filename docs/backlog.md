@@ -248,3 +248,11 @@ Status tags: `[open]` `[in progress]` `[done]` `[dropped]`.
 
 - `[done]` **Correction to the entry above: the endpoint IS a real partial update now.** Re-ran the exact same command that nulled the ids (`run --mock --push`, 23 rows, payload never naming `stripe_invoice_id`) and all three ids survived byte-identical. The earlier entry saying the endpoint "still nulls other columns absent from the body" was true when observed and is no longer true, so something was fixed endpoint-side between the two runs. Proven by behaviour, not by assurance: same client code (cf0594f), same command, opposite outcome.
 - `[done]` The merge contract is therefore verified end to end: a human-owned column (`status`) and a Stripe-owned column (`stripe_invoice_id`) both survive a full 23-row email ingest that names neither.
+
+## 16 Aug 2026 - v1.5 Slice 2a demo complete
+
+- `[done]` Three approved rows finalised through the approval-gated worker (dry run first, then `--send`): Rheinbach `in_1U4h7VQ...`, Iberia `in_1U4h7XQ...`, Verde `in_1U4h7aQ...`, all `draft -> open`. Before/after Stripe diff: 15 invoices before and after, none created, none deleted, exactly 3 changed. `auto_advance=False`, `attempted=False`, `paid_at=None` on all three, so nothing reached a customer.
+- `[decision]` Due dates were set while the invoices were still DRAFTS, before finalising. A draft is fully editable; an open invoice is not. The script asserted `status == 'draft'` per invoice and would have skipped rather than edited anything already finalised.
+- `[done]` The dunning loop then produced one invoice per tier at a single as-of date (2026-09-20): Verde 4d overdue -> escalation, Iberia 2d -> reminder_2, Rheinbach 1d -> reminder_1. Three escalating drafts written, nothing sent. This is the first run of the loop against real Stripe data rather than fixtures.
+- `[open]` The reminder_1 draft reads "1 days overdue" in the table line (the runner's own formatting, not the draft text, which correctly says "1 day"). Cosmetic, in `row_for`.
+- `[open]` The `velasco partners s.l.|12500|EUR` duplicate signature is still present and still deliberate. It now shows up in every Stripe snapshot diff as a standing duplicate-signature warning.
